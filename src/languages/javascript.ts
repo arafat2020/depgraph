@@ -111,12 +111,10 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
   return entities;
 }
 
-// ─── import extractor ───────────────────────────────────
 
 function extractImports(code: string): RawImport[] {
   const imports: RawImport[] = [];
 
-  // named imports: import { a, b } from './somewhere'
   const namedPattern = /^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/gm;
   let match: RegExpExecArray | null;
 
@@ -130,7 +128,6 @@ function extractImports(code: string): RawImport[] {
     });
   }
 
-  // default imports: import Something from './somewhere'
   const defaultPattern = /^import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/gm;
   while ((match = defaultPattern.exec(code)) !== null) {
     imports.push({
@@ -159,7 +156,6 @@ function extractImports(code: string): RawImport[] {
 function extractExports(code: string): string[] {
   const exports: string[] = [];
 
-  // named exports: export function/class/const
   const namedPattern = /^export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface)\s+(\w+)/gm;
   let match: RegExpExecArray | null;
 
