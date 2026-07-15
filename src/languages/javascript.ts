@@ -31,6 +31,16 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
   const lines = code.split('\n');
 
   const patterns: Array<{ regex: RegExp; type: string }> = [
+    // React components (PascalCase arrow functions)
+    {
+      regex: /^(?:export\s+)?const\s+([A-Z]\w+)\s*=\s*(?:\([^)]*\)|[^=])\s*=>/gm,
+      type: 'component'
+    },
+    // React hooks (camelCase starting with "use")
+    {
+      regex: /^(?:export\s+)?(?:const\s+)?(use[A-Z]\w+)\s*=/gm,
+      type: 'hook'
+    },
     // regular functions
     {
       regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm,
@@ -45,16 +55,6 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
     {
       regex: /^(?:export\s+)?(?:default\s+)?class\s+(\w+)/gm,
       type: 'class'
-    },
-    // React components (PascalCase arrow functions)
-    {
-      regex: /^(?:export\s+)?const\s+([A-Z]\w+)\s*=\s*(?:\([^)]*\)|[^=])\s*=>/gm,
-      type: 'component'
-    },
-    // React hooks (camelCase starting with "use")
-    {
-      regex: /^(?:export\s+)?(?:const\s+)?(use[A-Z]\w+)\s*=/gm,
-      type: 'hook'
     },
     // TypeScript interfaces
     {
