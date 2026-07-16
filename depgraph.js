@@ -68,12 +68,12 @@ var require_constants = __commonJS({
     exports2.MAX_FILE_SIZE = 3e5;
     exports2.MAX_BFS_DEPTH = 10;
     exports2.COMPLEXITY_THRESHOLDS = {
+      /** Complexity score is "low" if there are 3 or fewer branch points. */
       low: 3,
-      // 0-3 branches  → low complexity
+      /** Complexity score is "medium" if there are between 4 and 8 branch points. */
       medium: 8,
-      // 4-8 branches  → medium complexity
+      /** Complexity score is "high" if there are 9 or more branch points. */
       high: Infinity
-      // 9+            → high complexity
     };
   }
 });
@@ -225,6 +225,109 @@ var require_javascript = __commonJS({
       extractExports
     };
     (0, registry_1.registerParser)(JavaScriptParser);
+  }
+});
+
+// dist/languages/python.js
+var require_python = __commonJS({
+  "dist/languages/python.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const defLine = lines.findIndex((l) => l.match(new RegExp(`def\\s+${name}\\s*\\(`)));
+      if (defLine === -1)
+        return "low";
+      const bodyLines = [];
+      for (let i = defLine + 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.trim() === "")
+          continue;
+        if (!line.match(/^\s+/))
+          break;
+        bodyLines.push(line);
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|elif|else|for|while|except|and|or)\b/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    function extractEntities(code, filePath) {
+      const entities = [];
+      const patterns = [
+        // regular functions
+        {
+          regex: /^(?:async\s+)?def\s+(\w+)\s*\(/gm,
+          type: "function"
+        },
+        // classes
+        {
+          regex: /^class\s+(\w+)(?:\s*\([^)]*\))?\s*:/gm,
+          type: "class"
+        }
+      ];
+      for (const { regex, type } of patterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const name = match[1];
+          if (type === "function" && name.startsWith("__") && name.endsWith("__"))
+            continue;
+          if (entities.some((e) => e.name === name))
+            continue;
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, name) : "low"
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const fromPattern = /^from\s+([\w.]+)\s+import\s+(.+)$/gm;
+      let match;
+      while ((match = fromPattern.exec(code)) !== null) {
+        const source = match[1];
+        const names = match[2].split(",").map((n) => n.trim()).filter((n) => n.length > 0);
+        const isLocal = source.startsWith(".");
+        imports.push({ source, names, isLocal });
+      }
+      const importPattern = /^import\s+([\w.]+)/gm;
+      while ((match = importPattern.exec(code)) !== null) {
+        const source = match[1];
+        imports.push({
+          source,
+          names: [source],
+          isLocal: false
+          // bare imports are always external
+        });
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const allMatch = code.match(/__all__\s*=\s*\[([^\]]+)\]/);
+      if (!allMatch)
+        return [];
+      return allMatch[1].split(",").map((n) => n.trim().replace(/['"]/g, "")).filter((n) => n.length > 0);
+    }
+    var PythonParser = {
+      lang: "py",
+      extensions: [".py"],
+      extractEntities,
+      extractImports,
+      extractExports
+    };
+    (0, registry_1.registerParser)(PythonParser);
   }
 });
 
@@ -715,6 +818,7 @@ var __importDefault = exports && exports.__importDefault || function(mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 require_javascript();
+require_python();
 var fs_1 = __importDefault(require("fs"));
 var collector_1 = require_collector();
 var parser_1 = require_parser();
@@ -742,7 +846,7 @@ function getFlag(flag) {
 }
 function printHelp() {
   console.log(`
-${bold("DepGraph Compiler")} ${dim("v1.0.0")}
+${bold("DepGraph Compiler")} ${dim("v1.0.2")}
 ${dim("Dependency mapping \xB7 Impact simulation \xB7 Developer intelligence")}
 
 ${bold("USAGE")}

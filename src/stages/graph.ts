@@ -1,6 +1,13 @@
 import path from 'path';
 import { ParsedFile, DepGraph, DepNode, DepEdge } from '../types';
 
+/**
+ * Assembles a resolved DepGraph from a collection of ParsedFile objects.
+ * Maps entity nodes, parses import dependencies to resolve linkage paths, and links corresponding imports to exports.
+ * 
+ * @param parsedFiles An array of parsed files containing raw entity and import metadata.
+ * @returns The resolved dependency graph containing nodes and directed import edges.
+ */
 export function buildGraph(parsedFiles: ParsedFile[]): DepGraph {
   const nodes = new Map<string, DepNode>();
   const edges: DepEdge[] = [];
@@ -107,14 +114,28 @@ export function buildGraph(parsedFiles: ParsedFile[]): DepGraph {
 
 // ─── HELPERS ──────────────────────────────────────────────────
 
-// turns "getUserById" + "userService" → "getUserById__userService"
+/**
+ * Creates a unique composite identifier string for a node by combining the entity name and clean file base name.
+ * 
+ * @param name The name of the entity.
+ * @param fileBase The base filename (without extensions).
+ * @returns A composite node ID.
+ */
 function makeId(name: string, fileBase: string): string {
   const cleanName = name.replace(/[^a-zA-Z0-9]/g, '_');
   const cleanBase = fileBase.replace(/[^a-zA-Z0-9]/g, '_');
   return `${cleanName}__${cleanBase}`;
 }
 
-// resolves './userService' to 'src/services/userService.ts'
+/**
+ * Resolves a relative import path path to the matching absolute/relative project file path registered in the project.
+ * Tries file extensions (`.ts`, `.tsx`, `.js`, `.jsx`, `/index.ts`, etc.) in sequential priority.
+ * 
+ * @param fromFile The file path containing the import declaration.
+ * @param importSource The import source path string.
+ * @param allFiles A list of all parsed files in the project.
+ * @returns The matched file path if resolved, or null.
+ */
 function resolvePath(
   fromFile: string,
   importSource: string,

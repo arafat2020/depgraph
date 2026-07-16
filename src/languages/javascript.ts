@@ -5,6 +5,12 @@ import { COMPLEXITY_THRESHOLDS } from '../constants';
 
 // ─── helpers ────────────────────────────────────────────
 
+/**
+ * Estimates the cyclomatic complexity rating of a function based on the count of decision/branching keywords.
+ * @param code The clean source code of the file.
+ * @param name The name of the function to estimate complexity for.
+ * @returns A string representing the complexity level ('low', 'medium', or 'high').
+ */
 function estimateComplexity(code: string, name: string): string {
   // find the function body and count branch keywords
   const bodyMatch = code.match(
@@ -20,12 +26,24 @@ function estimateComplexity(code: string, name: string): string {
   return 'high';
 }
 
+/**
+ * Normalizes an arbitrary text string into an alphanumeric identifier (with underscores replacing non-word characters).
+ * @param text The source text string.
+ * @returns The slugified identifier string.
+ */
 function slugify(text: string): string {
   return text.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
 // ─── entity extractor ───────────────────────────────────
 
+/**
+ * Extracts raw entities (React components, hooks, functions, classes, routes, etc.) from clean JavaScript or TypeScript source code.
+ * Uses regular expression heuristics to discover declarations.
+ * @param code The clean source code of the file (without single-line comments).
+ * @param filePath The file path of the source file.
+ * @returns An array of raw extracted code entities.
+ */
 function extractEntities(code: string, filePath: string): RawEntity[] {
   const entities: RawEntity[] = [];
   const lines = code.split('\n');
@@ -111,7 +129,11 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
   return entities;
 }
 
-
+/**
+ * Extracts raw imports from clean source code, detecting ESM imports (`import`) and CommonJS `require` statements.
+ * @param code The clean source code of the file.
+ * @returns An array of raw extracted import structures.
+ */
 function extractImports(code: string): RawImport[] {
   const imports: RawImport[] = [];
 
@@ -153,6 +175,11 @@ function extractImports(code: string): RawImport[] {
 
 // ─── export extractor ───────────────────────────────────
 
+/**
+ * Extracts exported entity names from clean source code, including inline exports and export list declarations.
+ * @param code The clean source code of the file.
+ * @returns An array of exported entity identifier names.
+ */
 function extractExports(code: string): string[] {
   const exports: string[] = [];
 
@@ -175,6 +202,9 @@ function extractExports(code: string): string[] {
 
 // ─── register ───────────────────────────────────────────
 
+/**
+ * The language parser implementation for JavaScript and TypeScript source files.
+ */
 const JavaScriptParser: LanguageParser = {
   lang: 'js',
   extensions: ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'],

@@ -8,6 +8,16 @@ import {
   getCriticalNodes
 } from './metrics';
 
+/**
+ * Formats, compiles, and writes the complete dependency report to the specified file path.
+ * Prepares the JSON payload containing metadata summaries, resolved nodes, edges, file information,
+ * and the optional simulation report.
+ * 
+ * @param graph The computed dependency graph.
+ * @param parsed The list of all parsed files.
+ * @param outputPath The file path where the JSON output should be saved.
+ * @param impact The optional impact simulation report.
+ */
 export function writeOutput(
   graph:      DepGraph,
   parsed:     ParsedFile[],

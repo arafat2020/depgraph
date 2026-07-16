@@ -2,6 +2,7 @@
 
 // ─── 1. IMPORTS first ────────────────────────────────────
 import './languages/javascript';
+import './languages/python';
 import fs from 'fs';
 import { collectFiles } from './stages/collector';
 import { parseFiles } from './stages/parser';
@@ -16,6 +17,13 @@ const noColor = args.includes('--no-color');
 const verbose = args.includes('--verbose');
 
 // ─── 3. COLOR HELPERS third (before any function uses them)
+/**
+ * Formats terminal text with ANSI escape color codes, unless colors are disabled.
+ * 
+ * @param text The text string to format.
+ * @param code The ANSI color/style code.
+ * @returns The formatted string.
+ */
 function color(text: string, code: string): string {
   if (noColor) return text;
   return `\x1b[${code}m${text}\x1b[0m`;
@@ -28,14 +36,25 @@ const red = (t: string) => color(t, '31');
 const cyan = (t: string) => color(t, '36');
 
 // ─── 4. ALL OTHER HELPERS fourth ─────────────────────────
+
+/**
+ * Retrieves the value of a command line option/flag if it exists.
+ * Expects the value to be the next direct argument.
+ * 
+ * @param flag The option flag string (e.g. "--output").
+ * @returns The option value if present, otherwise undefined.
+ */
 function getFlag(flag: string): string | undefined {
   const idx = args.indexOf(flag);
   return idx !== -1 ? args[idx + 1] : undefined;
 }
 
+/**
+ * Prints the CLI usage description, supported options, and command examples to the stdout.
+ */
 function printHelp(): void {
   console.log(`
-${bold('DepGraph Compiler')} ${dim('v1.0.0')}
+${bold('DepGraph Compiler')} ${dim('v1.0.2')}
 ${dim('Dependency mapping · Impact simulation · Developer intelligence')}
 
 ${bold('USAGE')}
@@ -63,6 +82,9 @@ ${bold('EXAMPLES')}
 `);
 }
 
+/**
+ * Prints a decorated startup banner to the console.
+ */
 function printBanner(): void {
   console.log(`
 ${bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
@@ -71,6 +93,14 @@ ${bold('━━━━━━━━━━━━━━━━━━━━━━━━
 `);
 }
 
+/**
+ * Prints a summary table of the compiled dependency graph.
+ * 
+ * @param fileCount The total count of scanned files.
+ * @param nodeCount The total count of resolved nodes.
+ * @param edgeCount The total count of dependency edges.
+ * @param criticalNodes An array of critical node identifiers.
+ */
 function printSummary(
   fileCount: number,
   nodeCount: number,
@@ -90,6 +120,11 @@ function printSummary(
   }
 }
 
+/**
+ * Prints the results table of an impact simulation run.
+ * 
+ * @param impact The computed impact report object.
+ */
 function printImpact(impact: ReturnType<typeof simulateImpact>): void {
   const levelColor = impact.riskLevel === 'CRITICAL' ? red
     : impact.riskLevel === 'HIGH' ? yellow

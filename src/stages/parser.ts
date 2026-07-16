@@ -3,6 +3,13 @@ import path from 'path';
 import { ParsedFile, RawEntity, RawImport } from '../types';
 import { getLanguageParser } from '../languages/registry';
 
+/**
+ * Parses an individual source file to extract its metadata, imports, exports, and internal code entities.
+ * Dynamically resolves the language parser, strips single-line comments from code before parsing, and computes line counts.
+ * 
+ * @param filePath The absolute or relative path to the file to parse.
+ * @returns A ParsedFile object if successful, or null if the file cannot be read or no parser matches the extension.
+ */
 export function parseFile(filePath: string): ParsedFile | null {
   let code: string;
   try {
@@ -38,6 +45,13 @@ export function parseFile(filePath: string): ParsedFile | null {
   return { filePath, lang: parser.lang, lines, entities, imports, exports };
 }
 
+/**
+ * Iteratively parses an array of file paths.
+ * Skips files that cannot be parsed (e.g. unsupported extensions, unreadable files).
+ * 
+ * @param filePaths An array of file paths to process.
+ * @returns An array of successfully parsed files.
+ */
 export function parseFiles(filePaths: string[]): ParsedFile[] {
   const results: ParsedFile[] = [];
 

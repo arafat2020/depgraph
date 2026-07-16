@@ -2,9 +2,21 @@ import fs from 'fs';
 import path from 'path';
 import { IGNORE_DIRS, SUPPORTED_EXTS, MAX_FILE_SIZE } from '../constants';
 
+/**
+ * Recursively scans a target directory and gathers paths of all files that match
+ * supported extensions and fit within maximum file size limitations.
+ * Automatically ignores specified directories (e.g. node_modules, .git, etc.).
+ * 
+ * @param dir The root directory path to start scanning from.
+ * @returns An array of absolute or relative file paths matching scanner criteria.
+ */
 export function collectFiles(dir: string): string[] {
   const results: string[] = [];
 
+  /**
+   * Helper function to recursively walk through directory entries.
+   * @param currentDir The current directory path to traverse.
+   */
   function walk(currentDir: string): void {
     // 1. what's inside this folder?
     let entries: string[];

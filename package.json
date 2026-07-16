@@ -1,6 +1,6 @@
 {
   "name": "depgraph-core",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Dependency mapping and impact simulation for JS/TS projects",
   "main": "depgraph.js",
   "bin": {
@@ -21,6 +21,10 @@
     "typescript"
   ],
   "author": "Arafat Mannan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/arafat2020/depgraph.git"
+  },
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^26.1.1",
