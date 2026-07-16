@@ -1,29 +1,31 @@
+#!/usr/bin/env node
+
 // ─── 1. IMPORTS first ────────────────────────────────────
 import './languages/javascript';
 import fs from 'fs';
-import { collectFiles }  from './stages/collector';
-import { parseFiles }    from './stages/parser';
-import { buildGraph }    from './stages/graph';
+import { collectFiles } from './stages/collector';
+import { parseFiles } from './stages/parser';
+import { buildGraph } from './stages/graph';
 import { computeMetrics, getCriticalNodes } from './stages/metrics';
 import { simulateImpact } from './stages/impact';
-import { writeOutput }   from './stages/output';
+import { writeOutput } from './stages/output';
 
 // ─── 2. PARSE ARGS second ────────────────────────────────
-const args          = process.argv.slice(2);
-const noColor       = args.includes('--no-color');
-const verbose       = args.includes('--verbose');
+const args = process.argv.slice(2);
+const noColor = args.includes('--no-color');
+const verbose = args.includes('--verbose');
 
 // ─── 3. COLOR HELPERS third (before any function uses them)
 function color(text: string, code: string): string {
   if (noColor) return text;
   return `\x1b[${code}m${text}\x1b[0m`;
 }
-const dim    = (t: string) => color(t, '2');
-const bold   = (t: string) => color(t, '1');
-const green  = (t: string) => color(t, '32');
+const dim = (t: string) => color(t, '2');
+const bold = (t: string) => color(t, '1');
+const green = (t: string) => color(t, '32');
 const yellow = (t: string) => color(t, '33');
-const red    = (t: string) => color(t, '31');
-const cyan   = (t: string) => color(t, '36');
+const red = (t: string) => color(t, '31');
+const cyan = (t: string) => color(t, '36');
 
 // ─── 4. ALL OTHER HELPERS fourth ─────────────────────────
 function getFlag(flag: string): string | undefined {
@@ -90,9 +92,9 @@ function printSummary(
 
 function printImpact(impact: ReturnType<typeof simulateImpact>): void {
   const levelColor = impact.riskLevel === 'CRITICAL' ? red
-    : impact.riskLevel === 'HIGH'     ? yellow
-    : impact.riskLevel === 'MEDIUM'   ? cyan
-    : green;
+    : impact.riskLevel === 'HIGH' ? yellow
+      : impact.riskLevel === 'MEDIUM' ? cyan
+        : green;
 
   console.log(`\n${bold('💥 Impact Simulation')}`);
   console.log(`   ${dim('Target      :')} ${bold(impact.targetNode)}`);
@@ -106,9 +108,9 @@ function printImpact(impact: ReturnType<typeof simulateImpact>): void {
     console.log(`\n${bold(`📋 Affected Nodes (${impact.affectedNodes.length})`)}`);
     for (const node of impact.affectedNodes) {
       const impColor = node.impact === 'critical' ? red
-        : node.impact === 'high'   ? yellow
-        : node.impact === 'medium' ? cyan
-        : green;
+        : node.impact === 'high' ? yellow
+          : node.impact === 'medium' ? cyan
+            : green;
 
       console.log(`\n   ${impColor(`[${node.impact.toUpperCase().padEnd(8)}]`)} ${bold(node.name)}`);
       console.log(`   ${dim('file    :')} ${node.file}`);
@@ -136,10 +138,10 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
   process.exit(0);
 }
 
-const projectDir   = args[0];
-const outputPath   = getFlag('--output') ?? './depgraph-output.json';
+const projectDir = args[0];
+const outputPath = getFlag('--output') ?? './depgraph-output.json';
 const impactTarget = getFlag('--impact');
-const impactDesc   = impactTarget
+const impactDesc = impactTarget
   ? (args[args.indexOf('--impact') + 2] ?? 'no description provided')
   : undefined;
 
@@ -152,17 +154,17 @@ if (!fs.existsSync(projectDir)) {
 }
 
 try {
-  const files   = collectFiles(projectDir);
+  const files = collectFiles(projectDir);
   if (verbose) {
     files.forEach(f => console.log(dim(`  ${f}`)));
   }
 
-  const parsed  = parseFiles(files);
+  const parsed = parseFiles(files);
   if (verbose) {
     parsed.forEach(f => console.log(dim(`  parsed: ${f.filePath} → ${f.entities.length} entities`)));
   }
 
-  const graph   = buildGraph(parsed);
+  const graph = buildGraph(parsed);
   const metrics = computeMetrics(graph);
 
   printSummary(files.length, metrics.nodes.size, metrics.edges.length, getCriticalNodes(metrics));

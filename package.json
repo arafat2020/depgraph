@@ -1,20 +1,30 @@
 {
-  "name": "depgraph",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "depgraph-core",
+  "version": "1.0.1",
+  "description": "Dependency mapping and impact simulation for JS/TS projects",
+  "main": "depgraph.js",
+  "bin": {
+    "depgraph": "depgraph.js"
+  },
   "scripts": {
     "build": "tsc",
-    "dev": "tsc --watch",
-    "start": "node dist/main.js",
-    "test": "vitest run"
+    "bundle": "esbuild dist/main.js --bundle --platform=node --outfile=depgraph.js",
+    "release": "npm run build && npm run bundle",
+    "test": "vitest",
+    "test:run": "vitest run"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
+  "keywords": [
+    "dependency-graph",
+    "static-analysis",
+    "impact-analysis",
+    "cli",
+    "typescript"
+  ],
+  "author": "Arafat Mannan",
+  "license": "MIT",
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "esbuild": "^0.28.1",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10"
   }
