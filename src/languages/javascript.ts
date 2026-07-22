@@ -1,6 +1,6 @@
 import path from 'path';
 import { RawEntity, RawImport } from '../types';
-import { LanguageParser, registerParser } from './registry';
+import { EntityPattern, LanguageParser, registerParser } from './registry';
 import { COMPLEXITY_THRESHOLDS } from '../constants';
 
 // ─── helpers ────────────────────────────────────────────
@@ -35,6 +35,56 @@ function slugify(text: string): string {
   return text.replace(/[^a-zA-Z0-9]/g, '_');
 }
 
+// ─── entity patterns (module-level so gitdiff can reuse them) ────────────────
+
+/**
+ * The entity-matching patterns for JavaScript and TypeScript.
+ * Exposed via `entityPatterns` on the parser so gitdiff.ts can reuse them
+ * against git diff context lines without duplicating any regex.
+ */
+export const jsEntityPatterns: EntityPattern[] = [
+  // React components (PascalCase arrow functions)
+  {
+    regex: /^(?:export\s+)?const\s+([A-Z]\w+)\s*=\s*(?:\([^)]*\)|[^=])\s*=>/gm,
+    type: 'component'
+  },
+  // React hooks (camelCase starting with "use")
+  {
+    regex: /^(?:export\s+)?(?:const\s+)?(use[A-Z]\w+)\s*=/gm,
+    type: 'hook'
+  },
+  // regular functions
+  {
+    regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm,
+    type: 'function'
+  },
+  // arrow functions assigned to const
+  {
+    regex: /^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/gm,
+    type: 'function'
+  },
+  // classes
+  {
+    regex: /^(?:export\s+)?(?:default\s+)?class\s+(\w+)/gm,
+    type: 'class'
+  },
+  // TypeScript interfaces
+  {
+    regex: /^(?:export\s+)?interface\s+(\w+)/gm,
+    type: 'interface'
+  },
+  // TypeScript types
+  {
+    regex: /^(?:export\s+)?type\s+(\w+)\s*=/gm,
+    type: 'type'
+  },
+  // Express routes (capture group 1 = method, group 2 = path — skipped in gitdiff context matching)
+  {
+    regex: /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/gm,
+    type: 'api'
+  },
+];
+
 // ─── entity extractor ───────────────────────────────────
 
 /**
@@ -46,52 +96,8 @@ function slugify(text: string): string {
  */
 function extractEntities(code: string, filePath: string): RawEntity[] {
   const entities: RawEntity[] = [];
-  const lines = code.split('\n');
 
-  const patterns: Array<{ regex: RegExp; type: string }> = [
-    // React components (PascalCase arrow functions)
-    {
-      regex: /^(?:export\s+)?const\s+([A-Z]\w+)\s*=\s*(?:\([^)]*\)|[^=])\s*=>/gm,
-      type: 'component'
-    },
-    // React hooks (camelCase starting with "use")
-    {
-      regex: /^(?:export\s+)?(?:const\s+)?(use[A-Z]\w+)\s*=/gm,
-      type: 'hook'
-    },
-    // regular functions
-    {
-      regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm,
-      type: 'function'
-    },
-    // arrow functions assigned to const
-    {
-      regex: /^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/gm,
-      type: 'function'
-    },
-    // classes
-    {
-      regex: /^(?:export\s+)?(?:default\s+)?class\s+(\w+)/gm,
-      type: 'class'
-    },
-    // TypeScript interfaces
-    {
-      regex: /^(?:export\s+)?interface\s+(\w+)/gm,
-      type: 'interface'
-    },
-    // TypeScript types
-    {
-      regex: /^(?:export\s+)?type\s+(\w+)\s*=/gm,
-      type: 'type'
-    },
-    // Express routes
-    {
-      regex: /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/gm,
-      type: 'api'
-    },
-  ];
-
-  for (const { regex, type } of patterns) {
+  for (const { regex, type } of jsEntityPatterns) {
     let match: RegExpExecArray | null;
 
     // reset regex state before each use
@@ -211,6 +217,7 @@ const JavaScriptParser: LanguageParser = {
   extractEntities,
   extractImports,
   extractExports,
+  entityPatterns: jsEntityPatterns,
 };
 
 registerParser(JavaScriptParser);

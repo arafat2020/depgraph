@@ -83,6 +83,7 @@ var require_javascript = __commonJS({
   "dist/languages/javascript.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.jsEntityPatterns = void 0;
     var registry_1 = require_registry();
     var constants_1 = require_constants();
     function estimateComplexity(code, name) {
@@ -98,52 +99,51 @@ var require_javascript = __commonJS({
         return "medium";
       return "high";
     }
+    exports2.jsEntityPatterns = [
+      // React components (PascalCase arrow functions)
+      {
+        regex: /^(?:export\s+)?const\s+([A-Z]\w+)\s*=\s*(?:\([^)]*\)|[^=])\s*=>/gm,
+        type: "component"
+      },
+      // React hooks (camelCase starting with "use")
+      {
+        regex: /^(?:export\s+)?(?:const\s+)?(use[A-Z]\w+)\s*=/gm,
+        type: "hook"
+      },
+      // regular functions
+      {
+        regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm,
+        type: "function"
+      },
+      // arrow functions assigned to const
+      {
+        regex: /^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/gm,
+        type: "function"
+      },
+      // classes
+      {
+        regex: /^(?:export\s+)?(?:default\s+)?class\s+(\w+)/gm,
+        type: "class"
+      },
+      // TypeScript interfaces
+      {
+        regex: /^(?:export\s+)?interface\s+(\w+)/gm,
+        type: "interface"
+      },
+      // TypeScript types
+      {
+        regex: /^(?:export\s+)?type\s+(\w+)\s*=/gm,
+        type: "type"
+      },
+      // Express routes (capture group 1 = method, group 2 = path — skipped in gitdiff context matching)
+      {
+        regex: /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/gm,
+        type: "api"
+      }
+    ];
     function extractEntities(code, filePath) {
       const entities = [];
-      const lines = code.split("\n");
-      const patterns = [
-        // React components (PascalCase arrow functions)
-        {
-          regex: /^(?:export\s+)?const\s+([A-Z]\w+)\s*=\s*(?:\([^)]*\)|[^=])\s*=>/gm,
-          type: "component"
-        },
-        // React hooks (camelCase starting with "use")
-        {
-          regex: /^(?:export\s+)?(?:const\s+)?(use[A-Z]\w+)\s*=/gm,
-          type: "hook"
-        },
-        // regular functions
-        {
-          regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm,
-          type: "function"
-        },
-        // arrow functions assigned to const
-        {
-          regex: /^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/gm,
-          type: "function"
-        },
-        // classes
-        {
-          regex: /^(?:export\s+)?(?:default\s+)?class\s+(\w+)/gm,
-          type: "class"
-        },
-        // TypeScript interfaces
-        {
-          regex: /^(?:export\s+)?interface\s+(\w+)/gm,
-          type: "interface"
-        },
-        // TypeScript types
-        {
-          regex: /^(?:export\s+)?type\s+(\w+)\s*=/gm,
-          type: "type"
-        },
-        // Express routes
-        {
-          regex: /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/gm,
-          type: "api"
-        }
-      ];
-      for (const { regex, type } of patterns) {
+      for (const { regex, type } of exports2.jsEntityPatterns) {
         let match;
         regex.lastIndex = 0;
         while ((match = regex.exec(code)) !== null) {
@@ -222,7 +222,8 @@ var require_javascript = __commonJS({
       extensions: [".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx"],
       extractEntities,
       extractImports,
-      extractExports
+      extractExports,
+      entityPatterns: exports2.jsEntityPatterns
     };
     (0, registry_1.registerParser)(JavaScriptParser);
   }
@@ -233,6 +234,7 @@ var require_python = __commonJS({
   "dist/languages/python.js"(exports2) {
     "use strict";
     Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.pyEntityPatterns = void 0;
     var registry_1 = require_registry();
     var constants_1 = require_constants();
     function estimateComplexity(code, name) {
@@ -257,21 +259,21 @@ var require_python = __commonJS({
         return "medium";
       return "high";
     }
+    exports2.pyEntityPatterns = [
+      // regular functions
+      {
+        regex: /^(?:async\s+)?def\s+(\w+)\s*\(/gm,
+        type: "function"
+      },
+      // classes
+      {
+        regex: /^class\s+(\w+)(?:\s*\([^)]*\))?\s*:/gm,
+        type: "class"
+      }
+    ];
     function extractEntities(code, filePath) {
       const entities = [];
-      const patterns = [
-        // regular functions
-        {
-          regex: /^(?:async\s+)?def\s+(\w+)\s*\(/gm,
-          type: "function"
-        },
-        // classes
-        {
-          regex: /^class\s+(\w+)(?:\s*\([^)]*\))?\s*:/gm,
-          type: "class"
-        }
-      ];
-      for (const { regex, type } of patterns) {
+      for (const { regex, type } of exports2.pyEntityPatterns) {
         regex.lastIndex = 0;
         let match;
         while ((match = regex.exec(code)) !== null) {
@@ -325,9 +327,85 @@ var require_python = __commonJS({
       extensions: [".py"],
       extractEntities,
       extractImports,
-      extractExports
+      extractExports,
+      entityPatterns: exports2.pyEntityPatterns
     };
     (0, registry_1.registerParser)(PythonParser);
+  }
+});
+
+// dist/languages/go.js
+var require_go = __commonJS({
+  "dist/languages/go.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.goEntityPatterns = void 0;
+    var registry_1 = require_registry();
+    exports2.goEntityPatterns = [
+      // functions (including methods: func (r *Receiver) Name(...))
+      {
+        regex: /^func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(/gm,
+        type: "function"
+      },
+      // type declarations (structs, interfaces, type aliases)
+      {
+        regex: /^type\s+(\w+)\s+(?:struct|interface)/gm,
+        type: "class"
+      }
+    ];
+    function extractEntities(code, filePath) {
+      const entities = [];
+      for (const { regex, type } of exports2.goEntityPatterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const name = match[1];
+          if (entities.some((e) => e.name === name))
+            continue;
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          entities.push({ name, type, line, complexity: "low" });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const singlePattern = /^import\s+(?:\w+\s+)?["']([^"']+)["']/gm;
+      let match;
+      while ((match = singlePattern.exec(code)) !== null) {
+        imports.push({ source: match[1], names: [match[1]], isLocal: match[1].startsWith(".") });
+      }
+      const blockPattern = /import\s+\(([^)]+)\)/gs;
+      while ((match = blockPattern.exec(code)) !== null) {
+        const lines = match[1].split("\n");
+        for (const line of lines) {
+          const pkgMatch = line.match(/(?:\w+\s+)?["']([^"']+)["']/);
+          if (pkgMatch) {
+            imports.push({ source: pkgMatch[1], names: [pkgMatch[1]], isLocal: pkgMatch[1].startsWith(".") });
+          }
+        }
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const exports3 = [];
+      const pattern = /^func\s+(?:\(\w+\s+\*?\w+\)\s+)?([A-Z]\w*)\s*\(/gm;
+      let match;
+      while ((match = pattern.exec(code)) !== null) {
+        exports3.push(match[1]);
+      }
+      return [...new Set(exports3)];
+    }
+    var GoParser = {
+      lang: "go",
+      extensions: [".go"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.goEntityPatterns
+    };
+    (0, registry_1.registerParser)(GoParser);
   }
 });
 
@@ -812,6 +890,157 @@ var require_output = __commonJS({
   }
 });
 
+// dist/stages/gitdiff.js
+var require_gitdiff = __commonJS({
+  "dist/stages/gitdiff.js"(exports2) {
+    "use strict";
+    var __importDefault2 = exports2 && exports2.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.getChangedEntities = getChangedEntities;
+    var child_process_1 = require("child_process");
+    var path_1 = __importDefault2(require("path"));
+    var registry_1 = require_registry();
+    function getChangedEntities(options) {
+      const diff = runGitDiff(options);
+      if (!diff)
+        return [];
+      return parseDiff(diff, options.projectDir);
+    }
+    function runGitDiff(options) {
+      const { projectDir: projectDir2, mode, commit, from, to } = options;
+      let command;
+      if (mode === "uncommitted") {
+        command = "git diff HEAD";
+      } else if (mode === "last-commit") {
+        if (commit) {
+          command = `git diff ${commit}~1 ${commit}`;
+        } else {
+          command = "git diff HEAD~1 HEAD";
+        }
+      } else if (mode === "branches") {
+        if (!from || !to) {
+          console.warn("\u26A0 --from and --to are required for branch comparison");
+          return null;
+        }
+        command = `git diff ${from}...${to}`;
+      } else {
+        return null;
+      }
+      try {
+        const result = (0, child_process_1.execSync)(command, {
+          cwd: projectDir2,
+          encoding: "utf-8",
+          stdio: ["pipe", "pipe", "pipe"]
+        });
+        return result || null;
+      } catch (err) {
+        console.warn(`\u26A0 Git command failed: ${command}`);
+        console.warn(`  Make sure ${projectDir2} is a git repository`);
+        return null;
+      }
+    }
+    function parseDiff(diff, projectDir2) {
+      const entities = [];
+      const lines = diff.split("\n");
+      let currentFile = "";
+      let changeType = "modified";
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (line.startsWith("diff --git")) {
+          const fileMatch = line.match(/b\/(.+)$/);
+          if (fileMatch) {
+            currentFile = fileMatch[1];
+          }
+          changeType = "modified";
+          continue;
+        }
+        if (line.startsWith("new file mode")) {
+          changeType = "added";
+          continue;
+        }
+        if (line.startsWith("deleted file mode")) {
+          changeType = "deleted";
+          continue;
+        }
+        if (line.startsWith("index ")) {
+          if (changeType === "modified")
+            changeType = "modified";
+          continue;
+        }
+        if (line.startsWith("@@")) {
+          const contextMatch = line.match(/@@[^@]*@@\s*(.+)$/);
+          if (contextMatch) {
+            const context = contextMatch[1].trim();
+            const entity = extractEntityFromContext(context, currentFile);
+            if (entity) {
+              const description = buildDescription(lines, i, entity.name);
+              const alreadyFound = entities.some((e) => e.name === entity.name && e.file === currentFile);
+              if (!alreadyFound) {
+                entities.push({
+                  name: entity.name,
+                  file: currentFile,
+                  changeType,
+                  description
+                });
+              }
+            }
+          }
+          continue;
+        }
+      }
+      return entities;
+    }
+    function extractEntityFromContext(context, file) {
+      const ext = path_1.default.extname(file).toLowerCase();
+      const parser = (0, registry_1.getLanguageParser)(ext);
+      if (parser?.entityPatterns) {
+        for (const { regex, type } of parser.entityPatterns) {
+          if (type === "api")
+            continue;
+          const singleLineRegex = new RegExp(regex.source, regex.flags.replace("g", ""));
+          const m = singleLineRegex.exec(context);
+          if (m?.[1])
+            return { name: m[1], type };
+        }
+        return null;
+      }
+      if ([".java", ".cs"].includes(ext)) {
+        const m = context.match(/(?:public|private|protected|static|override|async|virtual)\s+\S+\s+(\w+)\s*\(/);
+        if (m)
+          return { name: m[1], type: "method" };
+      }
+      return null;
+    }
+    function buildDescription(lines, contextIdx, entityName) {
+      const added = [];
+      const removed = [];
+      for (let i = contextIdx + 1; i < Math.min(contextIdx + 20, lines.length); i++) {
+        const line = lines[i];
+        if (line.startsWith("@@") || line.startsWith("diff"))
+          break;
+        if (line.startsWith("+") && !line.startsWith("+++")) {
+          added.push(line.slice(1).trim());
+        }
+        if (line.startsWith("-") && !line.startsWith("---")) {
+          removed.push(line.slice(1).trim());
+        }
+      }
+      if (added.length === 0 && removed.length > 0) {
+        return `${entityName}: ${removed.length} line(s) removed`;
+      }
+      if (added.length > 0 && removed.length === 0) {
+        return `${entityName}: ${added.length} line(s) added`;
+      }
+      if (added.length > 0 && removed.length > 0) {
+        return `${entityName}: ${removed.length} line(s) changed to ${added.length} new line(s)`;
+      }
+      return `${entityName}: modified`;
+    }
+  }
+});
+
 // dist/main.js
 var __importDefault = exports && exports.__importDefault || function(mod) {
   return mod && mod.__esModule ? mod : { "default": mod };
@@ -819,6 +1048,7 @@ var __importDefault = exports && exports.__importDefault || function(mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 require_javascript();
 require_python();
+require_go();
 var fs_1 = __importDefault(require("fs"));
 var collector_1 = require_collector();
 var parser_1 = require_parser();
@@ -826,6 +1056,7 @@ var graph_1 = require_graph();
 var metrics_1 = require_metrics();
 var impact_1 = require_impact();
 var output_1 = require_output();
+var gitdiff_1 = require_gitdiff();
 var args = process.argv.slice(2);
 var noColor = args.includes("--no-color");
 var verbose = args.includes("--verbose");
@@ -846,11 +1077,11 @@ function getFlag(flag) {
 }
 function printHelp() {
   console.log(`
-${bold("DepGraph Compiler")} ${dim("v1.0.2")}
+${bold("DepGraph")} ${dim("v1.0.2")}
 ${dim("Dependency mapping \xB7 Impact simulation \xB7 Developer intelligence")}
 
 ${bold("USAGE")}
-  node depgraph.js ${cyan("<projectDir>")} ${dim("[options]")}
+  depgraph ${cyan("<projectDir>")} ${dim("[options]")}
 
 ${bold("OPTIONS")}
   ${cyan("--output")}  ${dim("<file>")}        Output path  ${dim("(default: ./depgraph-output.json)")}
@@ -859,24 +1090,43 @@ ${bold("OPTIONS")}
   ${cyan("--no-color")}               Disable colors ${dim("(for CI)")}
   ${cyan("--help, -h")}               Show this help message
 
+${bold("GIT FLAGS")}
+  ${cyan("--git-impact")}              Auto-detect changes from git diff
+  ${cyan("--commit")}  ${dim("<sha>")}          Analyze a specific commit
+  ${cyan("--from")}    ${dim("<branch>")}        Compare from this branch
+  ${cyan("--to")}      ${dim("<branch>")}        Compare to this branch
+
 ${bold("EXAMPLES")}
   ${dim("# Map a project")}
-  node depgraph.js ./my-app
+  depgraph ./my-app
 
   ${dim("# Map with custom output")}
-  node depgraph.js ./my-app --output ./reports/graph.json
+  depgraph ./my-app --output ./reports/graph.json
 
   ${dim("# Simulate a change")}
-  node depgraph.js ./my-app --impact "getUserById" "removing userId param"
+  depgraph ./my-app --impact "getUserById" "removing userId param"
 
   ${dim("# CI mode")}
-  node depgraph.js ./src --no-color --output ./ci/depgraph.json
+  depgraph ./src --no-color --output ./ci/depgraph.json
+
+${bold("GIT EXAMPLES")}
+  ${dim("# Analyze uncommitted changes")}
+  depgraph ./src --git-impact
+
+  ${dim("# Analyze last commit")}
+  depgraph ./src --git-impact --commit HEAD
+
+  ${dim("# Compare two branches")}
+  depgraph ./src --git-impact --from main --to feature/my-branch
+
+  ${dim("# Specific commit")}
+  depgraph ./src --git-impact --commit abc1234
 `);
 }
 function printBanner() {
   console.log(`
 ${bold("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")}
-${bold("  DepGraph Compiler")}  ${dim("v1.0.0")}
+${bold("  DepGraph")}  ${dim("v1.0.0")}
 ${bold("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")}
 `);
 }
@@ -936,6 +1186,11 @@ var projectDir = args[0];
 var outputPath = getFlag("--output") ?? "./depgraph-output.json";
 var impactTarget = getFlag("--impact");
 var impactDesc = impactTarget ? args[args.indexOf("--impact") + 2] ?? "no description provided" : void 0;
+var gitImpact = args.includes("--git-impact");
+var gitCommit = getFlag("--commit");
+var gitFrom = getFlag("--from");
+var gitTo = getFlag("--to");
+var gitMode = gitFrom && gitTo ? "branches" : gitCommit ? "last-commit" : "uncommitted";
 printBanner();
 console.log(`${bold("\u{1F50D} Scanning")} ${cyan(projectDir)}
 `);
@@ -959,6 +1214,34 @@ try {
   if (impactTarget) {
     impact = (0, impact_1.simulateImpact)(metrics, impactTarget, impactDesc ?? "");
     printImpact(impact);
+  } else if (gitImpact) {
+    console.log(`
+${bold("\u{1F50D} Reading git diff...")}`);
+    const changed = (0, gitdiff_1.getChangedEntities)({
+      projectDir,
+      mode: gitMode,
+      commit: gitCommit,
+      from: gitFrom,
+      to: gitTo
+    });
+    if (changed.length === 0) {
+      console.log(`
+${green("\u2713")} No changed entities found in diff`);
+    } else {
+      console.log(`
+${bold(`Found ${changed.length} changed entity(s):`)}`);
+      for (const entity of changed) {
+        console.log(`   ${dim("\u2192")} ${entity.name}  ${dim(`(${entity.file})`)}`);
+      }
+      console.log(`
+${bold("Running impact simulation...")}`);
+      for (const entity of changed) {
+        console.log(`
+${dim("\u2500".repeat(42))}`);
+        const result = (0, impact_1.simulateImpact)(metrics, entity.name, entity.description);
+        printImpact(result);
+      }
+    }
   }
   (0, output_1.writeOutput)(metrics, parsed, outputPath, impact);
 } catch (err) {
