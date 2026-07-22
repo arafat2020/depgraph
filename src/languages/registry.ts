@@ -1,6 +1,18 @@
 import { RawEntity, RawImport } from '../types';
 
 /**
+ * A single entity-matching pattern used by a language parser.
+ * Used both internally by extractEntities and externally by gitdiff
+ * to match entity names from git diff context lines without duplicating regex.
+ */
+export interface EntityPattern {
+  /** Regular expression to match an entity declaration. Capture group 1 must be the entity name. */
+  regex: RegExp;
+  /** The entity type label (e.g. 'function', 'class', 'method'). */
+  type: string;
+}
+
+/**
  * Interface that must be implemented by parser engines for individual programming languages.
  * Provides extraction routines for parsing code constructs, imports, and exports from files.
  */
@@ -28,6 +40,12 @@ export interface LanguageParser {
    * @returns An array of exported entity identifier names.
    */
   extractExports:  (code: string) => string[];
+  /**
+   * Optional: the raw entity patterns used internally by this parser.
+   * When provided, gitdiff.ts will reuse them to match entity names
+   * from git diff context lines instead of duplicating regex.
+   */
+  entityPatterns?: EntityPattern[];
 }
 
 /**

@@ -1,5 +1,5 @@
 import { RawEntity, RawImport } from '../types';
-import { LanguageParser, registerParser } from './registry';
+import { EntityPattern, LanguageParser, registerParser } from './registry';
 import { COMPLEXITY_THRESHOLDS } from '../constants';
 
 // ─── helpers ────────────────────────────────────────────
@@ -33,25 +33,32 @@ function estimateComplexity(code: string, name: string): string {
     return 'high';
 }
 
+// ─── entity patterns (module-level so gitdiff can reuse them) ────────────────
+
+/**
+ * The entity-matching patterns for Python.
+ * Exposed via `entityPatterns` on the parser so gitdiff.ts can reuse them
+ * against git diff context lines without duplicating any regex.
+ */
+export const pyEntityPatterns: EntityPattern[] = [
+    // regular functions
+    {
+        regex: /^(?:async\s+)?def\s+(\w+)\s*\(/gm,
+        type: 'function'
+    },
+    // classes
+    {
+        regex: /^class\s+(\w+)(?:\s*\([^)]*\))?\s*:/gm,
+        type: 'class'
+    },
+];
+
 // ─── entity extractor ───────────────────────────────────
 
 function extractEntities(code: string, filePath: string): RawEntity[] {
     const entities: RawEntity[] = [];
 
-    const patterns: Array<{ regex: RegExp; type: string }> = [
-        // regular functions
-        {
-            regex: /^(?:async\s+)?def\s+(\w+)\s*\(/gm,
-            type: 'function'
-        },
-        // classes
-        {
-            regex: /^class\s+(\w+)(?:\s*\([^)]*\))?\s*:/gm,
-            type: 'class'
-        },
-    ];
-
-    for (const { regex, type } of patterns) {
+    for (const { regex, type } of pyEntityPatterns) {
         regex.lastIndex = 0;
         let match: RegExpExecArray | null;
 
@@ -155,6 +162,7 @@ const PythonParser: LanguageParser = {
     extractEntities,
     extractImports,
     extractExports,
+    entityPatterns: pyEntityPatterns,
 };
 
 registerParser(PythonParser);

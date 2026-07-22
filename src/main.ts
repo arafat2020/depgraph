@@ -3,6 +3,7 @@
 // ─── 1. IMPORTS first ────────────────────────────────────
 import './languages/javascript';
 import './languages/python';
+import './languages/go';
 import fs from 'fs';
 import { collectFiles } from './stages/collector';
 import { parseFiles } from './stages/parser';
@@ -10,6 +11,7 @@ import { buildGraph } from './stages/graph';
 import { computeMetrics, getCriticalNodes } from './stages/metrics';
 import { simulateImpact } from './stages/impact';
 import { writeOutput } from './stages/output';
+import { getChangedEntities } from './stages/gitdiff';
 
 // ─── 2. PARSE ARGS second ────────────────────────────────
 const args = process.argv.slice(2);
@@ -54,11 +56,11 @@ function getFlag(flag: string): string | undefined {
  */
 function printHelp(): void {
   console.log(`
-${bold('DepGraph Compiler')} ${dim('v1.0.2')}
+${bold('DepGraph')} ${dim('v1.0.2')}
 ${dim('Dependency mapping · Impact simulation · Developer intelligence')}
 
 ${bold('USAGE')}
-  node depgraph.js ${cyan('<projectDir>')} ${dim('[options]')}
+  depgraph ${cyan('<projectDir>')} ${dim('[options]')}
 
 ${bold('OPTIONS')}
   ${cyan('--output')}  ${dim('<file>')}        Output path  ${dim('(default: ./depgraph-output.json)')}
@@ -67,18 +69,37 @@ ${bold('OPTIONS')}
   ${cyan('--no-color')}               Disable colors ${dim('(for CI)')}
   ${cyan('--help, -h')}               Show this help message
 
+${bold('GIT FLAGS')}
+  ${cyan('--git-impact')}              Auto-detect changes from git diff
+  ${cyan('--commit')}  ${dim('<sha>')}          Analyze a specific commit
+  ${cyan('--from')}    ${dim('<branch>')}        Compare from this branch
+  ${cyan('--to')}      ${dim('<branch>')}        Compare to this branch
+
 ${bold('EXAMPLES')}
   ${dim('# Map a project')}
-  node depgraph.js ./my-app
+  depgraph ./my-app
 
   ${dim('# Map with custom output')}
-  node depgraph.js ./my-app --output ./reports/graph.json
+  depgraph ./my-app --output ./reports/graph.json
 
   ${dim('# Simulate a change')}
-  node depgraph.js ./my-app --impact "getUserById" "removing userId param"
+  depgraph ./my-app --impact "getUserById" "removing userId param"
 
   ${dim('# CI mode')}
-  node depgraph.js ./src --no-color --output ./ci/depgraph.json
+  depgraph ./src --no-color --output ./ci/depgraph.json
+
+${bold('GIT EXAMPLES')}
+  ${dim('# Analyze uncommitted changes')}
+  depgraph ./src --git-impact
+
+  ${dim('# Analyze last commit')}
+  depgraph ./src --git-impact --commit HEAD
+
+  ${dim('# Compare two branches')}
+  depgraph ./src --git-impact --from main --to feature/my-branch
+
+  ${dim('# Specific commit')}
+  depgraph ./src --git-impact --commit abc1234
 `);
 }
 
@@ -88,7 +109,7 @@ ${bold('EXAMPLES')}
 function printBanner(): void {
   console.log(`
 ${bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
-${bold('  DepGraph Compiler')}  ${dim('v1.0.0')}
+${bold('  DepGraph')}  ${dim('v1.0.0')}
 ${bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 `);
 }
@@ -173,12 +194,25 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
   process.exit(0);
 }
 
-const projectDir = args[0];
-const outputPath = getFlag('--output') ?? './depgraph-output.json';
+const projectDir   = args[0];
+const outputPath   = getFlag('--output')  ?? './depgraph-output.json';
 const impactTarget = getFlag('--impact');
-const impactDesc = impactTarget
+const impactDesc   = impactTarget
   ? (args[args.indexOf('--impact') + 2] ?? 'no description provided')
   : undefined;
+
+// ── git flags ────────────────────────────────────────────
+const gitImpact = args.includes('--git-impact');
+const gitCommit = getFlag('--commit');
+const gitFrom   = getFlag('--from');
+const gitTo     = getFlag('--to');
+
+// determine git mode
+const gitMode = (gitFrom && gitTo)
+  ? 'branches'
+  : gitCommit
+    ? 'last-commit'
+    : 'uncommitted';
 
 printBanner();
 console.log(`${bold('🔍 Scanning')} ${cyan(projectDir)}\n`);
@@ -204,10 +238,48 @@ try {
 
   printSummary(files.length, metrics.nodes.size, metrics.edges.length, getCriticalNodes(metrics));
 
+  // ─── impact simulation ──────────────────────────────────
+
   let impact = undefined;
+
   if (impactTarget) {
+    // manual mode — user specified the function name directly
     impact = simulateImpact(metrics, impactTarget, impactDesc ?? '');
     printImpact(impact);
+
+  } else if (gitImpact) {
+    // git mode — auto-detect changed entities from diff
+    console.log(`\n${bold('🔍 Reading git diff...')}`);
+
+    const changed = getChangedEntities({
+      projectDir,
+      mode:   gitMode as 'uncommitted' | 'last-commit' | 'branches',
+      commit: gitCommit,
+      from:   gitFrom,
+      to:     gitTo,
+    });
+
+    if (changed.length === 0) {
+      console.log(`\n${green('✓')} No changed entities found in diff`);
+    } else {
+      console.log(`\n${bold(`Found ${changed.length} changed entity(s):`)}`);
+      for (const entity of changed) {
+        console.log(`   ${dim('→')} ${entity.name}  ${dim(`(${entity.file})`)}`);
+      }
+
+      // run impact simulation for each changed entity
+      console.log(`\n${bold('Running impact simulation...')}`);
+
+      for (const entity of changed) {
+        console.log(`\n${dim('─'.repeat(42))}`);
+        const result = simulateImpact(
+          metrics,
+          entity.name,
+          entity.description,
+        );
+        printImpact(result);
+      }
+    }
   }
 
   writeOutput(metrics, parsed, outputPath, impact);
