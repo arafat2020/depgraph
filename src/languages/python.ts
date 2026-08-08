@@ -79,6 +79,12 @@ function stripAlias(name: string): string {
   return name.replace(/\s+as\s+\w+$/, '').trim();
 }
 
+/**
+ * Extracts import statements from Python code.
+ * @param code The Python code to analyze.
+ * @returns An array of extracted import statements.
+ */
+
 function extractImports(code: string): RawImport[] {
   const imports: RawImport[] = [];
 
@@ -114,7 +120,11 @@ function extractImports(code: string): RawImport[] {
 }
 
 // ─── export extractor ───────────────────────────────────
-
+/**
+ * Extracts exported names from Python code.
+ * @param code The Python code to analyze.
+ * @returns An array of exported names.
+ */
 function extractExports(code: string): string[] {
   // handle both single-line and multi-line __all__ = [...]
   const allMatch = code.match(/__all__\s*=\s*\[([\s\S]*?)\]/);
