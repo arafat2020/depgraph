@@ -38,6 +38,8 @@ export function getChangedEntities(options: GitDiffOptions): ChangedEntity[] {
   return parseDiff(diff, options.projectDir);
 }
 
+// export function getChangedEntitiesFromDiff(diff:)
+
 // ─── step 1: run the right git command ───────────────────
 
 function runGitDiff(options: GitDiffOptions): string | null {
