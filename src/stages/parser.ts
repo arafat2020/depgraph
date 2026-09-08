@@ -23,17 +23,21 @@ export function parseFile(filePath: string): ParsedFile | null {
   const parser = getLanguageParser(ext);
   if (!parser) return null;
 
-  // ← ADD THIS: strip single-line comments before parsing
+  // Strip single-line comments before parsing (// for C-style languages, # for Python/Ruby)
+  const isHashCommentLang = ['.py', '.rb', '.sh', '.bash', '.ps1'].includes(ext);
+  const commentChar = isHashCommentLang ? '#' : '//';
+
   const cleanCode = code
     .split('\n')
     .map(line => {
-      const commentIndex = line.indexOf('//');
+      const commentIndex = line.indexOf(commentChar);
       if (commentIndex === -1) return line;
-      // make sure // is not inside a string
+      // make sure comment character is not inside a string
       const before = line.slice(0, commentIndex);
-      const inString = (before.match(/"/g) || []).length % 2 !== 0
-                    || (before.match(/'/g) || []).length % 2 !== 0;
-      return inString ? line : line.slice(0, commentIndex);
+      const inDouble = (before.match(/"/g) || []).length % 2 !== 0;
+      const inSingle = (before.match(/'/g) || []).length % 2 !== 0;
+      const inBacktick = (before.match(/`/g) || []).length % 2 !== 0;
+      return (inDouble || inSingle || inBacktick) ? line : line.slice(0, commentIndex);
     })
     .join('\n');
 

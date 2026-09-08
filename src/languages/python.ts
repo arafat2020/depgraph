@@ -8,20 +8,35 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * Estimates the cyclomatic complexity rating of a Python function based on decision/branching keywords.
+ * @param code The clean source code of the file.
+ * @param name The name of the function to estimate complexity for.
+ * @returns A string representing the complexity level ('low', 'medium', or 'high').
+ */
 function estimateComplexity(code: string, name: string): string {
   const lines = code.split('\n');
-  const defLine = lines.findIndex(l => l.match(new RegExp(`def\\s+${escapeRegex(name)}\\s*\\(`)));
+  const defRegex = new RegExp(`^[ \\t]*(?:async\\s+)?def\\s+${escapeRegex(name)}\\s*\\(`, 'm');
+  const defLine = lines.findIndex(l => defRegex.test(l));
   if (defLine === -1) return 'low';
 
+  // Find where the def statement ends (colon ':') to locate the body
+  let bodyStart = defLine;
+  while (bodyStart < lines.length && !lines[bodyStart].includes(':')) {
+    bodyStart++;
+  }
+  bodyStart++;
+
   const bodyLines: string[] = [];
-  for (let i = defLine + 1; i < lines.length; i++) {
+  for (let i = bodyStart; i < lines.length; i++) {
     const line = lines[i];
     if (line.trim() === '') continue;
+    // Body ends when indentation returns to top-level or unindented relative to def
     if (!line.match(/^\s+/)) break;
     bodyLines.push(line);
   }
 
-  const branches = (bodyLines.join('\n').match(/\b(if|elif|else|for|while|except|and|or)\b/g) || []).length;
+  const branches = (bodyLines.join('\n').match(/\b(if|elif|else|for|while|except|and|or|match|case)\b/g) || []).length;
   if (branches <= COMPLEXITY_THRESHOLDS.low)    return 'low';
   if (branches <= COMPLEXITY_THRESHOLDS.medium) return 'medium';
   return 'high';
@@ -29,13 +44,20 @@ function estimateComplexity(code: string, name: string): string {
 
 // ─── entity patterns ────────────────────────────────────
 
+/**
+ * The entity-matching patterns for Python.
+ * Exposed via `entityPatterns` on the parser so gitdiff.ts can reuse them
+ * against git diff context lines without duplicating any regex.
+ */
 export const pyEntityPatterns: EntityPattern[] = [
+  // functions and methods (including async def)
   {
-    regex: /^[ \t]*(?:async\s+)?def\s+(\w+)\s*\(/gm,
+    regex: /^[ \t]*(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(/gm,
     type: 'function'
   },
+  // classes (with optional generic parameters [T] and base classes (Base))
   {
-    regex: /^class\s+(\w+)(?:\s*\([^)]*\))?\s*:/gm,
+    regex: /^[ \t]*class\s+([A-Za-z_]\w*)(?:\s*\[[^\]]*\])?(?:\s*\([^)]*\))?\s*:/gm,
     type: 'class'
   },
 ];
@@ -52,7 +74,7 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
     while ((match = regex.exec(code)) !== null) {
       const name = match[1];
 
-      // skip dunder methods (e.g. __init__, __str__)
+      // skip dunder methods (e.g. __init__, __str__, __repr__)
       if (type === 'function' && name.startsWith('__') && name.endsWith('__')) continue;
 
       const upToMatch = code.slice(0, match.index);
@@ -76,7 +98,7 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
 // ─── import extractor ───────────────────────────────────
 
 function stripAlias(name: string): string {
-  return name.replace(/\s+as\s+\w+$/, '').trim();
+  return name.replace(/\s+as\s+[A-Za-z_]\w*$/, '').trim();
 }
 
 /**
@@ -84,7 +106,6 @@ function stripAlias(name: string): string {
  * @param code The Python code to analyze.
  * @returns An array of extracted import statements.
  */
-
 function extractImports(code: string): RawImport[] {
   const imports: RawImport[] = [];
 
@@ -96,43 +117,55 @@ function extractImports(code: string): RawImport[] {
   );
 
   // from .module import name1, name2 [as alias]
+  // from . import utils
   const fromPattern = /^from\s+([\w.]+)\s+import\s+(.+)$/gm;
   let match: RegExpExecArray | null;
 
   while ((match = fromPattern.exec(normalised)) !== null) {
     const source = match[1];
-    const names = match[2]
+    const rawNames = match[2].replace(/#.*$/, ''); // strip inline comments
+    const names = rawNames
       .split(',')
-      .map(n => stripAlias(n))
+      .map(n => stripAlias(n.trim()))
       .filter(n => n.length > 0 && n !== '*');
 
     imports.push({ source, names, isLocal: source.startsWith('.') });
   }
 
-  // import os [as alias]
-  const importPattern = /^import\s+([\w.]+)(?:\s+as\s+\w+)?/gm;
+  // import os, sys [as alias]
+  const importPattern = /^import\s+([^#\n]+)/gm;
   while ((match = importPattern.exec(normalised)) !== null) {
-    const source = match[1];
-    imports.push({ source, names: [source], isLocal: false });
+    const modules = match[1].split(',').map(m => m.trim());
+    for (const mod of modules) {
+      if (!mod) continue;
+      const cleanMod = stripAlias(mod);
+      if (!cleanMod) continue;
+      imports.push({
+        source: cleanMod,
+        names: [cleanMod],
+        isLocal: cleanMod.startsWith('.'),
+      });
+    }
   }
 
   return imports;
 }
 
 // ─── export extractor ───────────────────────────────────
+
 /**
- * Extracts exported names from Python code.
+ * Extracts exported names from Python code via __all__.
  * @param code The Python code to analyze.
  * @returns An array of exported names.
  */
 function extractExports(code: string): string[] {
-  // handle both single-line and multi-line __all__ = [...]
-  const allMatch = code.match(/__all__\s*=\s*\[([\s\S]*?)\]/);
+  // handle __all__ = [...] or __all__ = (...)
+  const allMatch = code.match(/__all__\s*=\s*[\[\(]([\s\S]*?)[\]\)]/);
   if (!allMatch) return [];
 
   return allMatch[1]
     .split(',')
-    .map(n => n.trim().replace(/['"]/g, ''))
+    .map(n => n.trim().replace(/['"]/g, '').replace(/#.*$/, '').trim())
     .filter(n => n.length > 0);
 }
 
@@ -148,3 +181,4 @@ const PythonParser: LanguageParser = {
 };
 
 registerParser(PythonParser);
+

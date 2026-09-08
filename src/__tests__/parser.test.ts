@@ -152,6 +152,55 @@ function activeFunc() {}`);
     expect(importSources).not.toContain('./comment');
   });
 
+  it('extracts a TypeScript enum and type', () => {
+    const testFile = path.join(tempDir, 'types.ts');
+    fs.writeFileSync(testFile, 'export enum Status { ACTIVE, INACTIVE }\nexport type UserRole = "admin" | "user";');
+    const parsed = parseFile(testFile);
+    expect(parsed?.entities).toContainEqual(expect.objectContaining({
+      name: 'Status',
+      type: 'class'
+    }));
+    expect(parsed?.entities).toContainEqual(expect.objectContaining({
+      name: 'UserRole',
+      type: 'type'
+    }));
+  });
+
+  it('extracts combined default and named imports', () => {
+    const testFile = path.join(tempDir, 'combined.tsx');
+    fs.writeFileSync(testFile, "import React, { useState, useEffect as useEff } from 'react';");
+    const parsed = parseFile(testFile);
+    expect(parsed?.imports).toContainEqual(expect.objectContaining({
+      source: 'react',
+      names: expect.arrayContaining(['React', 'useState', 'useEffect'])
+    }));
+  });
+
+  it('extracts multi-line named imports', () => {
+    const testFile = path.join(tempDir, 'multiline.ts');
+    fs.writeFileSync(testFile, `import {
+      alpha,
+      beta,
+      gamma as g
+    } from './greek';`);
+    const parsed = parseFile(testFile);
+    expect(parsed?.imports).toContainEqual(expect.objectContaining({
+      source: './greek',
+      names: expect.arrayContaining(['alpha', 'beta', 'gamma'])
+    }));
+  });
+
+  it('extracts re-exports', () => {
+    const testFile = path.join(tempDir, 'index.ts');
+    fs.writeFileSync(testFile, "export { serviceA, serviceB } from './services';");
+    const parsed = parseFile(testFile);
+    expect(parsed?.imports).toContainEqual(expect.objectContaining({
+      source: './services',
+      names: ['serviceA', 'serviceB']
+    }));
+    expect(parsed?.exports).toEqual(expect.arrayContaining(['serviceA', 'serviceB']));
+  });
+
   it('returns null for unsupported file type', () => {
     const testFile = path.join(tempDir, 'test.txt');
     fs.writeFileSync(testFile, 'hello world');

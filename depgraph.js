@@ -87,12 +87,37 @@ var require_javascript = __commonJS({
     var registry_1 = require_registry();
     var constants_1 = require_constants();
     function estimateComplexity(code, name) {
-      const bodyMatch = code.match(new RegExp(`function\\s+${name}[^{]*{([\\s\\S]*?)
-}`, "m"));
-      if (!bodyMatch)
+      const lines = code.split("\n");
+      const nameRegex = new RegExp(`(?:(?:async\\s+)?function(?:\\s*\\*|\\s+)|(?:const|let|var)\\s+)${name}\\b|\\b${name}\\s*(?:<[^>]*>)?\\s*\\(`, "m");
+      const defLineIdx = lines.findIndex((l) => nameRegex.test(l));
+      if (defLineIdx === -1)
         return "low";
-      const body = bodyMatch[1];
-      const branches = (body.match(/\b(if|else|for|while|switch|catch|&&|\|\|)\b/g) || []).length;
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const char of line) {
+          if (char === "{") {
+            braceCount++;
+            started = true;
+          } else if (char === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0) {
+          break;
+        }
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|else\s+if|for|while|switch|case|catch|&&|\|\||\?\?)\b|\?[^:]*:/g) || []).length;
       if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
         return "low";
       if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
@@ -100,44 +125,69 @@ var require_javascript = __commonJS({
       return "high";
     }
     exports2.jsEntityPatterns = [
-      // React components (PascalCase arrow functions)
+      // React components: wrapped in memo/forwardRef
       {
-        regex: /^(?:export\s+)?const\s+([A-Z]\w+)\s*=\s*(?:\([^)]*\)|[^=])\s*=>/gm,
+        regex: /^(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+([A-Z]\w*)\s*=\s*(?:React\.)?(?:memo|forwardRef)\(/gm,
         type: "component"
       },
-      // React hooks (camelCase starting with "use")
+      // React components: PascalCase arrow functions
       {
-        regex: /^(?:export\s+)?(?:const\s+)?(use[A-Z]\w+)\s*=/gm,
+        regex: /^(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+([A-Z]\w*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_]\w*)\s*=>/gm,
+        type: "component"
+      },
+      // React components: PascalCase function declarations
+      {
+        regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Z]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
+        type: "component"
+      },
+      // React hooks: camelCase starting with "use" (arrow functions or const assignments)
+      {
+        regex: /^(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+(use[A-Z]\w*)\s*=/gm,
         type: "hook"
       },
-      // regular functions
+      // React hooks: camelCase starting with "use" (function declarations)
       {
-        regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(\w+)\s*\(/gm,
+        regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(use[A-Z]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
+        type: "hook"
+      },
+      // regular and async function declarations (including generator functions)
+      {
+        regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function(?:\s*\*\s*|\s+)([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
         type: "function"
       },
-      // arrow functions assigned to const
+      // arrow functions assigned to const / let / var
       {
-        regex: /^(?:export\s+)?const\s+(\w+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>/gm,
+        regex: /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_]\w*)\s*=>/gm,
         type: "function"
       },
-      // classes
+      // function expressions assigned to const / let / var
       {
-        regex: /^(?:export\s+)?(?:default\s+)?class\s+(\w+)/gm,
+        regex: /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?function/gm,
+        type: "function"
+      },
+      // classes (regular, exported, abstract)
+      {
+        regex: /^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_]\w*)/gm,
         type: "class"
       },
       // TypeScript interfaces
       {
-        regex: /^(?:export\s+)?interface\s+(\w+)/gm,
+        regex: /^(?:export\s+)?(?:default\s+)?interface\s+([A-Za-z_]\w*)/gm,
         type: "interface"
       },
       // TypeScript types
       {
-        regex: /^(?:export\s+)?type\s+(\w+)\s*=/gm,
+        regex: /^(?:export\s+)?(?:default\s+)?type\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*=/gm,
         type: "type"
       },
-      // Express routes (capture group 1 = method, group 2 = path — skipped in gitdiff context matching)
+      // TypeScript enums (regular or const enum)
       {
-        regex: /(?:app|router)\.(get|post|put|delete|patch)\s*\(\s*['"]([^'"]+)['"]/gm,
+        regex: /^(?:export\s+)?(?:const\s+)?enum\s+([A-Za-z_]\w*)/gm,
+        type: "class"
+      },
+      // Express / router routes (capture group 1 = method, group 2 = path — skipped in gitdiff context matching)
+      {
+        regex: /(?:app|router|server)\.(get|post|put|delete|patch|options|head)\s*\(\s*['"]([^'"]+)['"]/gm,
         type: "api"
       }
     ];
@@ -173,46 +223,114 @@ var require_javascript = __commonJS({
     }
     function extractImports(code) {
       const imports = [];
-      const namedPattern = /^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/gm;
+      const combinedPattern = /^import\s+(?:type\s+)?([A-Za-z_$]\w*)\s*,\s*(?:\{([^}]+)\}|\*\s+as\s+([A-Za-z_$]\w*))\s+from\s+['"]([^'"]+)['"]/gm;
       let match;
-      while ((match = namedPattern.exec(code)) !== null) {
-        const names = match[1].split(",").map((n) => n.trim().replace(/\s+as\s+\w+/, ""));
-        const source = match[2];
+      while ((match = combinedPattern.exec(code)) !== null) {
+        const defaultName = match[1];
+        const namedClause = match[2];
+        const nsName = match[3];
+        const source = match[4];
+        const names = [defaultName];
+        if (namedClause) {
+          const parsedNamed = namedClause.split(",").map((n) => n.trim().replace(/^type\s+/, "").replace(/\s+as\s+\w+$/, "").trim()).filter((n) => n.length > 0);
+          names.push(...parsedNamed);
+        }
+        if (nsName) {
+          names.push(nsName);
+        }
         imports.push({
           source,
-          names,
-          isLocal: source.startsWith(".")
+          names: [...new Set(names)],
+          isLocal: source.startsWith(".") || source.startsWith("/")
         });
       }
-      const defaultPattern = /^import\s+(\w+)\s+from\s+['"]([^'"]+)['"]/gm;
-      while ((match = defaultPattern.exec(code)) !== null) {
+      const namedPattern = /^import\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/gm;
+      while ((match = namedPattern.exec(code)) !== null) {
+        const source = match[2];
+        if (imports.some((i) => i.source === source))
+          continue;
+        const names = match[1].split(",").map((n) => n.trim().replace(/^type\s+/, "").replace(/\s+as\s+\w+$/, "").trim()).filter((n) => n.length > 0);
         imports.push({
-          source: match[2],
+          source,
+          names: [...new Set(names)],
+          isLocal: source.startsWith(".") || source.startsWith("/")
+        });
+      }
+      const defaultPattern = /^import\s+(?:type\s+)?([A-Za-z_$]\w*)\s+from\s+['"]([^'"]+)['"]/gm;
+      while ((match = defaultPattern.exec(code)) !== null) {
+        const source = match[2];
+        if (imports.some((i) => i.source === source))
+          continue;
+        imports.push({
+          source,
           names: [match[1]],
-          isLocal: match[2].startsWith(".")
+          isLocal: source.startsWith(".") || source.startsWith("/")
+        });
+      }
+      const nsPattern = /^import\s+\*\s+as\s+([A-Za-z_$]\w*)\s+from\s+['"]([^'"]+)['"]/gm;
+      while ((match = nsPattern.exec(code)) !== null) {
+        const source = match[2];
+        if (imports.some((i) => i.source === source))
+          continue;
+        imports.push({
+          source,
+          names: [match[1]],
+          isLocal: source.startsWith(".") || source.startsWith("/")
         });
       }
       const requirePattern = /(?:const|let|var)\s+\{?([^}=]+)\}?\s*=\s*require\s*\(\s*['"]([^'"]+)['"]\s*\)/gm;
       while ((match = requirePattern.exec(code)) !== null) {
-        const names = match[1].split(",").map((n) => n.trim());
+        const rawNames = match[1];
+        const source = match[2];
+        const names = rawNames.split(",").map((n) => n.trim().replace(/^\w+:\s*/, "").trim()).filter((n) => n.length > 0);
         imports.push({
-          source: match[2],
-          names,
-          isLocal: match[2].startsWith(".")
+          source,
+          names: [...new Set(names)],
+          isLocal: source.startsWith(".") || source.startsWith("/")
+        });
+      }
+      const reexportPattern = /^export\s+(?:\{([^}]+)\}|\*\s+as\s+([A-Za-z_$]\w*)|\*)\s+from\s+['"]([^'"]+)['"]/gm;
+      while ((match = reexportPattern.exec(code)) !== null) {
+        const namedClause = match[1];
+        const nsAlias = match[2];
+        const source = match[3];
+        let names = [];
+        if (namedClause) {
+          names = namedClause.split(",").map((n) => n.trim().replace(/^type\s+/, "").replace(/\s+as\s+\w+$/, "").trim()).filter((n) => n.length > 0);
+        } else if (nsAlias) {
+          names = [nsAlias];
+        } else {
+          names = ["*"];
+        }
+        imports.push({
+          source,
+          names: [...new Set(names)],
+          isLocal: source.startsWith(".") || source.startsWith("/")
         });
       }
       return imports;
     }
     function extractExports(code) {
       const exports3 = [];
-      const namedPattern = /^export\s+(?:default\s+)?(?:async\s+)?(?:function|class|const|let|var|type|interface)\s+(\w+)/gm;
+      const namedPattern = /^export\s+(?:default\s+)?(?:async\s+|abstract\s+)?(?:function(?:\s*\*|\s+)|class|const|let|var|type|interface|enum)\s+([A-Za-z_$]\w*)/gm;
       let match;
       while ((match = namedPattern.exec(code)) !== null) {
         exports3.push(match[1]);
       }
-      const listPattern = /^export\s+\{([^}]+)\}/gm;
+      const defaultIdentPattern = /^export\s+default\s+([A-Za-z_$]\w*)\s*(?:;|$)/gm;
+      while ((match = defaultIdentPattern.exec(code)) !== null) {
+        if (!["function", "class", "interface", "abstract"].includes(match[1])) {
+          exports3.push(match[1]);
+        }
+      }
+      const listPattern = /^export\s+\{([^}]+)\}(?!\s*from)/gm;
       while ((match = listPattern.exec(code)) !== null) {
-        const names = match[1].split(",").map((n) => n.trim());
+        const names = match[1].split(",").map((n) => n.trim().replace(/^type\s+/, "").replace(/^\w+\s+as\s+/, "").trim()).filter((n) => n.length > 0);
+        exports3.push(...names);
+      }
+      const reexportPattern = /^export\s+\{([^}]+)\}\s+from/gm;
+      while ((match = reexportPattern.exec(code)) !== null) {
+        const names = match[1].split(",").map((n) => n.trim().replace(/^type\s+/, "").replace(/^\w+\s+as\s+/, "").trim()).filter((n) => n.length > 0);
         exports3.push(...names);
       }
       return [...new Set(exports3)];
@@ -237,13 +355,22 @@ var require_python = __commonJS({
     exports2.pyEntityPatterns = void 0;
     var registry_1 = require_registry();
     var constants_1 = require_constants();
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
     function estimateComplexity(code, name) {
       const lines = code.split("\n");
-      const defLine = lines.findIndex((l) => l.match(new RegExp(`def\\s+${name}\\s*\\(`)));
+      const defRegex = new RegExp(`^[ \\t]*(?:async\\s+)?def\\s+${escapeRegex(name)}\\s*\\(`, "m");
+      const defLine = lines.findIndex((l) => defRegex.test(l));
       if (defLine === -1)
         return "low";
+      let bodyStart = defLine;
+      while (bodyStart < lines.length && !lines[bodyStart].includes(":")) {
+        bodyStart++;
+      }
+      bodyStart++;
       const bodyLines = [];
-      for (let i = defLine + 1; i < lines.length; i++) {
+      for (let i = bodyStart; i < lines.length; i++) {
         const line = lines[i];
         if (line.trim() === "")
           continue;
@@ -251,8 +378,7 @@ var require_python = __commonJS({
           break;
         bodyLines.push(line);
       }
-      const body = bodyLines.join("\n");
-      const branches = (body.match(/\b(if|elif|else|for|while|except|and|or)\b/g) || []).length;
+      const branches = (bodyLines.join("\n").match(/\b(if|elif|else|for|while|except|and|or|match|case)\b/g) || []).length;
       if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
         return "low";
       if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
@@ -260,14 +386,14 @@ var require_python = __commonJS({
       return "high";
     }
     exports2.pyEntityPatterns = [
-      // regular functions
+      // functions and methods (including async def)
       {
-        regex: /^(?:async\s+)?def\s+(\w+)\s*\(/gm,
+        regex: /^[ \t]*(?:async\s+)?def\s+([A-Za-z_]\w*)\s*\(/gm,
         type: "function"
       },
-      // classes
+      // classes (with optional generic parameters [T] and base classes (Base))
       {
-        regex: /^class\s+(\w+)(?:\s*\([^)]*\))?\s*:/gm,
+        regex: /^[ \t]*class\s+([A-Za-z_]\w*)(?:\s*\[[^\]]*\])?(?:\s*\([^)]*\))?\s*:/gm,
         type: "class"
       }
     ];
@@ -280,10 +406,10 @@ var require_python = __commonJS({
           const name = match[1];
           if (type === "function" && name.startsWith("__") && name.endsWith("__"))
             continue;
-          if (entities.some((e) => e.name === name))
-            continue;
           const upToMatch = code.slice(0, match.index);
           const line = upToMatch.split("\n").length;
+          if (entities.some((e) => e.name === name && e.line === line))
+            continue;
           entities.push({
             name,
             type,
@@ -294,33 +420,43 @@ var require_python = __commonJS({
       }
       return entities;
     }
+    function stripAlias(name) {
+      return name.replace(/\s+as\s+[A-Za-z_]\w*$/, "").trim();
+    }
     function extractImports(code) {
       const imports = [];
+      const normalised = code.replace(/^(from\s+[\w.]+\s+import\s*)\(\s*([\s\S]*?)\)/gm, (_, prefix, body) => prefix + body.replace(/\s*\n\s*/g, ", "));
       const fromPattern = /^from\s+([\w.]+)\s+import\s+(.+)$/gm;
       let match;
-      while ((match = fromPattern.exec(code)) !== null) {
+      while ((match = fromPattern.exec(normalised)) !== null) {
         const source = match[1];
-        const names = match[2].split(",").map((n) => n.trim()).filter((n) => n.length > 0);
-        const isLocal = source.startsWith(".");
-        imports.push({ source, names, isLocal });
+        const rawNames = match[2].replace(/#.*$/, "");
+        const names = rawNames.split(",").map((n) => stripAlias(n.trim())).filter((n) => n.length > 0 && n !== "*");
+        imports.push({ source, names, isLocal: source.startsWith(".") });
       }
-      const importPattern = /^import\s+([\w.]+)/gm;
-      while ((match = importPattern.exec(code)) !== null) {
-        const source = match[1];
-        imports.push({
-          source,
-          names: [source],
-          isLocal: false
-          // bare imports are always external
-        });
+      const importPattern = /^import\s+([^#\n]+)/gm;
+      while ((match = importPattern.exec(normalised)) !== null) {
+        const modules = match[1].split(",").map((m) => m.trim());
+        for (const mod of modules) {
+          if (!mod)
+            continue;
+          const cleanMod = stripAlias(mod);
+          if (!cleanMod)
+            continue;
+          imports.push({
+            source: cleanMod,
+            names: [cleanMod],
+            isLocal: cleanMod.startsWith(".")
+          });
+        }
       }
       return imports;
     }
     function extractExports(code) {
-      const allMatch = code.match(/__all__\s*=\s*\[([^\]]+)\]/);
+      const allMatch = code.match(/__all__\s*=\s*[\[\(]([\s\S]*?)[\]\)]/);
       if (!allMatch)
         return [];
-      return allMatch[1].split(",").map((n) => n.trim().replace(/['"]/g, "")).filter((n) => n.length > 0);
+      return allMatch[1].split(",").map((n) => n.trim().replace(/['"]/g, "").replace(/#.*$/, "").trim()).filter((n) => n.length > 0);
     }
     var PythonParser = {
       lang: "py",
@@ -341,16 +477,60 @@ var require_go = __commonJS({
     Object.defineProperty(exports2, "__esModule", { value: true });
     exports2.goEntityPatterns = void 0;
     var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const funcRegex = new RegExp(`func\\s+(?:\\([^)]*\\)\\s+)?${name}\\s*(?:\\[[^\\]]*\\])?\\s*\\(`, "m");
+      const defLineIdx = lines.findIndex((l) => funcRegex.test(l));
+      if (defLineIdx === -1)
+        return "low";
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const char of line) {
+          if (char === "{") {
+            braceCount++;
+            started = true;
+          } else if (char === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0) {
+          break;
+        }
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|else\s+if|for|switch|case|select|&&|\|\|)\b/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
     exports2.goEntityPatterns = [
-      // functions (including methods: func (r *Receiver) Name(...))
+      // functions and methods with optional receiver and type parameters (generics)
       {
-        regex: /^func\s+(?:\(\w+\s+\*?\w+\)\s+)?(\w+)\s*\(/gm,
+        regex: /^func\s+(?:\([^)]*\)\s+)?([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*\(/gm,
         type: "function"
       },
-      // type declarations (structs, interfaces, type aliases)
+      // type declarations (structs, interfaces) with optional type parameters
       {
-        regex: /^type\s+(\w+)\s+(?:struct|interface)/gm,
+        regex: /^type\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s+(?:struct|interface)/gm,
         type: "class"
+      },
+      // type aliases and custom types (e.g. type HandlerFunc func(...), type MyInt int)
+      {
+        regex: /^type\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s+(?!(?:struct|interface)\b)[A-Za-z_\[\]\*]/gm,
+        type: "type"
       }
     ];
     function extractEntities(code, filePath) {
@@ -364,25 +544,89 @@ var require_go = __commonJS({
             continue;
           const upToMatch = code.slice(0, match.index);
           const line = upToMatch.split("\n").length;
-          entities.push({ name, type, line, complexity: "low" });
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, name) : "low"
+          });
+        }
+      }
+      const blockTypePattern = /^type\s*\(\s*\n?([\s\S]*?)\n\s*\)/gm;
+      let blockMatch;
+      while ((blockMatch = blockTypePattern.exec(code)) !== null) {
+        const blockContent = blockMatch[1];
+        const blockStartLine = code.slice(0, blockMatch.index).split("\n").length;
+        const lines = blockContent.split("\n");
+        let braceDepth = 0;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (braceDepth === 0 && line.length > 0 && !line.startsWith("//")) {
+            const structInterfaceMatch = line.match(/^([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s+(struct|interface)/);
+            if (structInterfaceMatch) {
+              const name = structInterfaceMatch[1];
+              if (!entities.some((e) => e.name === name)) {
+                entities.push({
+                  name,
+                  type: "class",
+                  line: blockStartLine + i + 1,
+                  complexity: "low"
+                });
+              }
+            } else {
+              const aliasMatch = line.match(/^([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s+(?:=\s*)?(?!(?:struct|interface)\b)[A-Za-z_\[\]\*]/);
+              if (aliasMatch) {
+                const name = aliasMatch[1];
+                if (!entities.some((e) => e.name === name)) {
+                  entities.push({
+                    name,
+                    type: "type",
+                    line: blockStartLine + i + 1,
+                    complexity: "low"
+                  });
+                }
+              }
+            }
+          }
+          for (const ch of line) {
+            if (ch === "{")
+              braceDepth++;
+            else if (ch === "}")
+              braceDepth--;
+          }
         }
       }
       return entities;
     }
     function extractImports(code) {
       const imports = [];
-      const singlePattern = /^import\s+(?:\w+\s+)?["']([^"']+)["']/gm;
+      const singlePattern = /^import\s+(?:([A-Za-z_.\w]+)\s+)?["']([^"']+)["']/gm;
       let match;
       while ((match = singlePattern.exec(code)) !== null) {
-        imports.push({ source: match[1], names: [match[1]], isLocal: match[1].startsWith(".") });
+        const alias = match[1];
+        const source = match[2];
+        const pkgName = alias && alias !== "_" && alias !== "." ? alias : source.split("/").pop() || source;
+        imports.push({
+          source,
+          names: [pkgName],
+          isLocal: source.startsWith(".") || source.startsWith("/")
+        });
       }
-      const blockPattern = /import\s+\(([^)]+)\)/gs;
+      const blockPattern = /import\s*\(\s*([\s\S]*?)\s*\)/gm;
       while ((match = blockPattern.exec(code)) !== null) {
         const lines = match[1].split("\n");
         for (const line of lines) {
-          const pkgMatch = line.match(/(?:\w+\s+)?["']([^"']+)["']/);
+          const cleanLine = line.replace(/\/\/.*$/, "").trim();
+          const pkgMatch = cleanLine.match(/^(?:([A-Za-z_.\w]+)\s+)?["']([^"']+)["']/);
           if (pkgMatch) {
-            imports.push({ source: pkgMatch[1], names: [pkgMatch[1]], isLocal: pkgMatch[1].startsWith(".") });
+            const alias = pkgMatch[1];
+            const source = pkgMatch[2];
+            const pkgName = alias && alias !== "_" && alias !== "." ? alias : source.split("/").pop() || source;
+            imports.push({
+              source,
+              names: [pkgName],
+              isLocal: source.startsWith(".") || source.startsWith("/")
+            });
           }
         }
       }
@@ -390,10 +634,50 @@ var require_go = __commonJS({
     }
     function extractExports(code) {
       const exports3 = [];
-      const pattern = /^func\s+(?:\(\w+\s+\*?\w+\)\s+)?([A-Z]\w*)\s*\(/gm;
+      const funcPattern = /^func\s+(?:\([^)]*\)\s+)?([A-Z]\w*)\s*(?:\[[^\]]*\])?\s*\(/gm;
       let match;
-      while ((match = pattern.exec(code)) !== null) {
+      while ((match = funcPattern.exec(code)) !== null) {
         exports3.push(match[1]);
+      }
+      const typePattern = /^type\s+([A-Z]\w*)/gm;
+      while ((match = typePattern.exec(code)) !== null) {
+        exports3.push(match[1]);
+      }
+      const blockTypePattern = /^type\s*\(\s*\n?([\s\S]*?)\n\s*\)/gm;
+      let blockTypeMatch;
+      while ((blockTypeMatch = blockTypePattern.exec(code)) !== null) {
+        const lines = blockTypeMatch[1].split("\n");
+        let braceDepth = 0;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (braceDepth === 0 && trimmed.length > 0 && !trimmed.startsWith("//")) {
+            const m = trimmed.match(/^([A-Z]\w*)/);
+            if (m)
+              exports3.push(m[1]);
+          }
+          for (const ch of trimmed) {
+            if (ch === "{")
+              braceDepth++;
+            else if (ch === "}")
+              braceDepth--;
+          }
+        }
+      }
+      const constVarPattern = /^(?:const|var)\s+([A-Z]\w*)/gm;
+      while ((match = constVarPattern.exec(code)) !== null) {
+        exports3.push(match[1]);
+      }
+      const blockConstVarPattern = /^(?:const|var)\s*\(\s*\n?([\s\S]*?)\n\s*\)/gm;
+      while ((match = blockConstVarPattern.exec(code)) !== null) {
+        const lines = match[1].split("\n");
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed.startsWith("//")) {
+            const m = trimmed.match(/^([A-Z]\w*)/);
+            if (m)
+              exports3.push(m[1]);
+          }
+        }
       }
       return [...new Set(exports3)];
     }
@@ -406,6 +690,933 @@ var require_go = __commonJS({
       entityPatterns: exports2.goEntityPatterns
     };
     (0, registry_1.registerParser)(GoParser);
+  }
+});
+
+// dist/languages/csharp.js
+var require_csharp = __commonJS({
+  "dist/languages/csharp.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.csharpEntityPatterns = void 0;
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const methodRegex = new RegExp(`(?:(?:public|private|protected|internal|static|async|virtual|override|abstract|sealed|partial)\\s+)+[\\w<>\\[\\],?]+\\s+${name}\\s*(?:<[^>]*>)?\\s*\\(`, "m");
+      const defLineIdx = lines.findIndex((l) => methodRegex.test(l) || new RegExp(`\\b${name}\\s*\\(`, "m").test(l));
+      if (defLineIdx === -1)
+        return "low";
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const char of line) {
+          if (char === "{") {
+            braceCount++;
+            started = true;
+          } else if (char === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0) {
+          break;
+        }
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|else\s+if|for|foreach|while|do|switch|case|catch|&&|\|\||\?\?)\b|\?[^:]*:/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    exports2.csharpEntityPatterns = [
+      // Classes, structs, records, interfaces, enums
+      {
+        regex: /^[ \t]*(?:(?:public|private|protected|internal|static|abstract|sealed|partial)\s+)*(?:class|interface|enum|struct|record(?:\s+(?:class|struct))?)\s+([A-Za-z_]\w*)/gm,
+        type: "class"
+      },
+      // Methods (constructors, instance methods, async/static methods)
+      {
+        regex: /^[ \t]*(?:(?:public|private|protected|internal|static|async|virtual|override|abstract|sealed|partial)\s+)+(?:(?:async\s+)?[\w<>[\]?,]+\s+)?([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
+        type: "function"
+      }
+    ];
+    function extractEntities(code, filePath) {
+      const entities = [];
+      for (const { regex, type } of exports2.csharpEntityPatterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const name = match[1];
+          if (["if", "for", "foreach", "while", "switch", "catch", "lock", "using", "get", "set"].includes(name)) {
+            continue;
+          }
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          if (entities.some((e) => e.name === name && e.line === line))
+            continue;
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, name) : "low"
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const usingPattern = /^[ \t]*(?:global\s+)?using\s+(?:static\s+)?(?:([A-Za-z_]\w*)\s*=\s*)?([A-Za-z_][\w.]*(?:<[^>]*>)?)\s*;/gm;
+      let match;
+      while ((match = usingPattern.exec(code)) !== null) {
+        const alias = match[1];
+        const targetFqn = match[2].trim();
+        const simpleName = alias || targetFqn.split(".").pop() || targetFqn;
+        const isLocal = !targetFqn.startsWith("System") && !targetFqn.startsWith("Microsoft");
+        imports.push({
+          source: targetFqn,
+          names: [simpleName],
+          isLocal
+        });
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const exports3 = [];
+      const typePattern = /^[ \t]*(?:public|internal)\s+(?:(?:static|abstract|sealed|partial)\s+)*(?:class|interface|enum|struct|record(?:\s+(?:class|struct))?)\s+([A-Za-z_]\w*)/gm;
+      let match;
+      while ((match = typePattern.exec(code)) !== null) {
+        exports3.push(match[1]);
+      }
+      const methodPattern = /^[ \t]*(?:public|internal)\s+(?:(?:static|async|virtual|override|abstract|sealed|partial)\s+)*(?:[\w<>[\]?,]+\s+)?([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm;
+      while ((match = methodPattern.exec(code)) !== null) {
+        const name = match[1];
+        if (!["if", "for", "foreach", "while", "switch", "catch", "lock", "using", "get", "set"].includes(name)) {
+          exports3.push(name);
+        }
+      }
+      return [...new Set(exports3)];
+    }
+    var CSharpParser = {
+      lang: "cs",
+      extensions: [".cs"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.csharpEntityPatterns
+    };
+    (0, registry_1.registerParser)(CSharpParser);
+  }
+});
+
+// dist/languages/java.js
+var require_java = __commonJS({
+  "dist/languages/java.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.javaEntityPatterns = void 0;
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const defRegex = new RegExp(`(?:^|\\s)${escapeRegex(name)}\\s*\\(`, "m");
+      const defLineIdx = lines.findIndex((l) => defRegex.test(l));
+      if (defLineIdx === -1)
+        return "low";
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const ch of line) {
+          if (ch === "{") {
+            braceCount++;
+            started = true;
+          } else if (ch === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0)
+          break;
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|else\s+if|else|for|while|do|switch|case|catch|&&|\|\|)\b/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    exports2.javaEntityPatterns = [
+      // class / abstract class / final class
+      {
+        regex: /^[ \t]*(?:(?:public|protected|private|abstract|final|static)\s+)*class\s+([A-Za-z_]\w*)(?:\s*<[^{]*?)?\s*(?:extends\s+\S+\s*)?(?:implements\s+[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // interface
+      {
+        regex: /^[ \t]*(?:(?:public|protected|private|abstract|static)\s+)*interface\s+([A-Za-z_]\w*)(?:\s*<[^{]*?)?\s*(?:extends\s+[^{]+)?\s*\{/gm,
+        type: "interface"
+      },
+      // record (Java 14+)
+      {
+        regex: /^[ \t]*(?:(?:public|protected|private|final|static)\s+)*record\s+([A-Za-z_]\w*)\s*\(/gm,
+        type: "class"
+      },
+      // enum
+      {
+        regex: /^[ \t]*(?:(?:public|protected|private|static)\s+)*enum\s+([A-Za-z_]\w*)\s*(?:implements\s+[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // annotation type
+      {
+        regex: /^[ \t]*(?:(?:public|protected|private|abstract|static)\s+)*@interface\s+([A-Za-z_]\w*)\s*\{/gm,
+        type: "interface"
+      },
+      // method declarations (with return type before the name)
+      {
+        regex: /^[ \t]*(?:(?:public|protected|private|static|final|abstract|synchronized|native|default|override)\s+)*(?:<[^>]*>\s+)?(?:[\w.<>\[\]]+\s+)+([A-Za-z_]\w*)\s*\([^)]*\)\s*(?:throws\s+[\w,\s]+)?\s*\{/gm,
+        type: "function"
+      }
+    ];
+    function extractEntities(code, _filePath) {
+      const entities = [];
+      for (const { regex, type } of exports2.javaEntityPatterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const name = match[1];
+          if (["if", "else", "for", "while", "do", "switch", "try", "catch", "return", "new", "void", "this", "super"].includes(name))
+            continue;
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          if (entities.some((e) => e.name === name && e.line === line))
+            continue;
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, name) : "low"
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const importPattern = /^import\s+((?:static)\s+)?([\w.]+(?:\.\*)?)?\s*;/gm;
+      let match;
+      while ((match = importPattern.exec(code)) !== null) {
+        const isStatic = Boolean(match[1]);
+        const fullPath = (match[2] || "").trim();
+        if (!fullPath)
+          continue;
+        const isWildcard = fullPath.endsWith(".*");
+        const cleanPath = isWildcard ? fullPath.slice(0, -2) : fullPath;
+        const segments = cleanPath.split(".");
+        let source;
+        let name;
+        if (isStatic) {
+          name = segments.pop() || cleanPath;
+          source = segments.join(".") || cleanPath;
+        } else {
+          name = segments[segments.length - 1] || cleanPath;
+          source = cleanPath;
+        }
+        imports.push({
+          source,
+          names: [name],
+          isLocal: false
+        });
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const exports3 = [];
+      const typePattern = /^public\s+(?:(?:abstract|final|static)\s+)*(?:class|interface|enum|record|@interface)\s+([A-Za-z_]\w*)/gm;
+      let match;
+      while ((match = typePattern.exec(code)) !== null) {
+        exports3.push(match[1]);
+      }
+      const methodPattern = /^[ \t]*public\s+(?:(?:static|final|abstract|synchronized|native|default)\s+)*(?:<[^>]*>\s+)?(?:[\w.<>\[\]]+\s+)+([A-Za-z_]\w*)\s*\(/gm;
+      while ((match = methodPattern.exec(code)) !== null) {
+        const name = match[1];
+        if (!["if", "for", "while", "switch", "class", "interface", "enum"].includes(name)) {
+          exports3.push(name);
+        }
+      }
+      return [...new Set(exports3)];
+    }
+    var JavaParser = {
+      lang: "java",
+      extensions: [".java"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.javaEntityPatterns
+    };
+    (0, registry_1.registerParser)(JavaParser);
+  }
+});
+
+// dist/languages/kotlin.js
+var require_kotlin = __commonJS({
+  "dist/languages/kotlin.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.kotlinEntityPatterns = void 0;
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const defRegex = new RegExp(`(?:^|\\s)fun\\s+(?:<[^>]*>\\s+)?(?:\\w[\\w.]*\\.)?${escapeRegex(name)}\\s*(?:\\(|<)`, "m");
+      const defLineIdx = lines.findIndex((l) => defRegex.test(l));
+      if (defLineIdx === -1)
+        return "low";
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const ch of line) {
+          if (ch === "{") {
+            braceCount++;
+            started = true;
+          } else if (ch === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0)
+          break;
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|else\s+if|else|for|while|when|catch|&&|\|\|)\b/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    exports2.kotlinEntityPatterns = [
+      // class declarations (including data class, sealed class, abstract class, inner class)
+      // The trailing brace is optional: abstract classes may have no body on the same line.
+      // We anchor by requiring the class name to be followed by whitespace, <, (, :, { or EOL.
+      {
+        regex: /^[ \t]*(?:(?:public|private|protected|internal|abstract|sealed|data|open|inner|inline|value|annotation)\s+)*class\s+([A-Za-z_]\w*)(?=[\s<(:,{\n]|$)/gm,
+        type: "class"
+      },
+      // object declarations (singleton objects and companion objects)
+      {
+        regex: /^[ \t]*(?:(?:public|private|protected|internal)\s+)*(?:companion\s+)?object\s+([A-Za-z_]\w*)\s*(?::\s*[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // interface declarations
+      {
+        regex: /^[ \t]*(?:(?:public|private|protected|internal|sealed|fun)\s+)*interface\s+([A-Za-z_]\w*)(?:\s*<[^{]*)?(?:\s*:\s*[^{]+)?\s*\{/gm,
+        type: "interface"
+      },
+      // enum class
+      {
+        regex: /^[ \t]*(?:(?:public|private|protected|internal)\s+)*enum\s+class\s+([A-Za-z_]\w*)\s*(?:\([^)]*\))?\s*\{/gm,
+        type: "class"
+      },
+      // function declarations (including suspend, inline, operator, extension functions)
+      {
+        regex: /^[ \t]*(?:(?:public|private|protected|internal|override|open|final|abstract|suspend|inline|operator|infix|tailrec|external|actual|expect)\s+)*fun\s+(?:<[^>]*>\s+)?(?:[\w.]+\.)?([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
+        type: "function"
+      }
+    ];
+    function extractEntities(code, _filePath) {
+      const entities = [];
+      for (const { regex, type } of exports2.kotlinEntityPatterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const name = match[1];
+          if (!name)
+            continue;
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          if (entities.some((e) => e.name === name && e.line === line))
+            continue;
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, name) : "low"
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const importPattern = /^import\s+([\w.]+?)(\.\*)?\s*(?:as\s+(\w+))?\s*$/gm;
+      let match;
+      while ((match = importPattern.exec(code)) !== null) {
+        const fullPath = match[1];
+        const isWild = Boolean(match[2]);
+        const alias = match[3];
+        if (isWild)
+          continue;
+        const lastName = fullPath.split(".").pop() || fullPath;
+        const localName = alias || lastName;
+        imports.push({
+          source: fullPath,
+          names: [localName],
+          isLocal: false
+        });
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const exports3 = [];
+      const patterns = [
+        /^(?:(?:public|open|abstract|sealed|data|inline|value)\s+)*class\s+([A-Za-z_]\w*)/gm,
+        /^(?:(?:public)\s+)?object\s+([A-Za-z_]\w*)/gm,
+        /^(?:(?:public|sealed|fun)\s+)*interface\s+([A-Za-z_]\w*)/gm,
+        /^(?:(?:public|open|inline|suspend|operator|infix|tailrec)\s+)*fun\s+(?:<[^>]*>\s+)?([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm
+      ];
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(code)) !== null) {
+          if (match[1])
+            exports3.push(match[1]);
+        }
+      }
+      return [...new Set(exports3)];
+    }
+    var KotlinParser = {
+      lang: "kotlin",
+      extensions: [".kt", ".kts"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.kotlinEntityPatterns
+    };
+    (0, registry_1.registerParser)(KotlinParser);
+  }
+});
+
+// dist/languages/php.js
+var require_php = __commonJS({
+  "dist/languages/php.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.phpEntityPatterns = void 0;
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const defRegex = new RegExp(`(?:^|\\s)function\\s+${escapeRegex(name)}\\s*\\(`, "m");
+      const defLineIdx = lines.findIndex((l) => defRegex.test(l));
+      if (defLineIdx === -1)
+        return "low";
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const ch of line) {
+          if (ch === "{") {
+            braceCount++;
+            started = true;
+          } else if (ch === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0)
+          break;
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|elseif|else|for|foreach|while|do|switch|case|catch|&&|\|\|)\b/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    exports2.phpEntityPatterns = [
+      // class (abstract class, final class, readonly class, etc.)
+      {
+        regex: /^[ \t]*(?:(?:abstract|final|readonly)\s+)*class\s+([A-Za-z_]\w*)(?:\s+extends\s+\S+)?(?:\s+implements\s+[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // interface
+      {
+        regex: /^[ \t]*interface\s+([A-Za-z_]\w*)(?:\s+extends\s+[^{]+)?\s*\{/gm,
+        type: "interface"
+      },
+      // trait
+      {
+        regex: /^[ \t]*trait\s+([A-Za-z_]\w*)\s*\{/gm,
+        type: "class"
+      },
+      // enum (PHP 8.1+)
+      {
+        regex: /^[ \t]*enum\s+([A-Za-z_]\w*)(?:\s*:\s*\w+)?(?:\s+implements\s+[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // function and method declarations
+      {
+        regex: /^[ \t]*(?:(?:public|protected|private|static|abstract|final|readonly)\s+)*function\s+([A-Za-z_]\w*)\s*\(/gm,
+        type: "function"
+      }
+    ];
+    function extractEntities(code, _filePath) {
+      const entities = [];
+      for (const { regex, type } of exports2.phpEntityPatterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const name = match[1];
+          if (!name)
+            continue;
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          if (entities.some((e) => e.name === name && e.line === line))
+            continue;
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, name) : "low"
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const usePattern = /^use\s+([\w\\]+(?:\s*\{[^}]*\})?)\s*(?:as\s+(\w+)\s*)?;/gm;
+      let match;
+      while ((match = usePattern.exec(code)) !== null) {
+        const raw = match[1].trim();
+        const alias = match[2]?.trim();
+        if (raw.includes("{")) {
+          const prefixMatch = raw.match(/^([\w\\]+)\\?\s*\{([^}]*)\}/);
+          if (prefixMatch) {
+            const prefix = prefixMatch[1];
+            const items = prefixMatch[2].split(",");
+            for (const item of items) {
+              const parts = item.trim().split(/\s+as\s+/i);
+              const fullName = (prefix + "\\" + parts[0].trim()).replace(/\\+/g, "\\");
+              const lastName = parts[1] || parts[0].trim().split("\\").pop() || fullName;
+              imports.push({ source: fullName, names: [lastName.trim()], isLocal: false });
+            }
+          }
+        } else {
+          const fullPath = raw;
+          const lastName = alias || fullPath.split("\\").pop() || fullPath;
+          imports.push({ source: fullPath, names: [lastName.trim()], isLocal: false });
+        }
+      }
+      const includePattern = /(?:require|include)(?:_once)?\s*[^;'"]*?['"]([^'"]+)['"]/gm;
+      while ((match = includePattern.exec(code)) !== null) {
+        const source = match[1];
+        const name = source.split("/").pop()?.replace(/\.php$/i, "") || source;
+        imports.push({ source, names: [name], isLocal: true });
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const exports3 = [];
+      const patterns = [
+        /^(?:(?:abstract|final|readonly)\s+)*class\s+([A-Za-z_]\w*)/gm,
+        /^interface\s+([A-Za-z_]\w*)/gm,
+        /^trait\s+([A-Za-z_]\w*)/gm,
+        /^enum\s+([A-Za-z_]\w*)/gm,
+        /^function\s+([A-Za-z_]\w*)\s*\(/gm
+      ];
+      for (const pattern of patterns) {
+        let match;
+        while ((match = pattern.exec(code)) !== null) {
+          if (match[1])
+            exports3.push(match[1]);
+        }
+      }
+      return [...new Set(exports3)];
+    }
+    var PhpParser = {
+      lang: "php",
+      extensions: [".php", ".phtml", ".php3", ".php4", ".php5", ".php7"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.phpEntityPatterns
+    };
+    (0, registry_1.registerParser)(PhpParser);
+  }
+});
+
+// dist/languages/ruby.js
+var require_ruby = __commonJS({
+  "dist/languages/ruby.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.rubyEntityPatterns = void 0;
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    function sanitizeMethodName(name) {
+      if (name.endsWith("!"))
+        return `${name.slice(0, -1)}_bang`;
+      if (name.endsWith("?"))
+        return `${name.slice(0, -1)}_pred`;
+      if (name.endsWith("="))
+        return `${name.slice(0, -1)}_eq`;
+      return name;
+    }
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const defRegex = new RegExp(`^[ \\t]*def\\s+(?:self\\.)?${escapeRegex(name)}(?:[!?=])?\\s*(\\(|$)`, "m");
+      const defLineIdx = lines.findIndex((l) => defRegex.test(l));
+      if (defLineIdx === -1)
+        return "low";
+      const bodyLines = [];
+      let depth = 0;
+      for (let i = defLineIdx; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        if (/\b(def|class|module|do\b|begin|if(?!.*\bend\b)|unless(?!.*\bend\b)|while(?!.*\bend\b)|until(?!.*\bend\b)|for\s|case\b)\b/.test(trimmed)) {
+          depth++;
+        }
+        if (/\bend\b/.test(trimmed)) {
+          depth--;
+          if (depth <= 0) {
+            bodyLines.push(line);
+            break;
+          }
+        }
+        bodyLines.push(line);
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|elsif|else|unless|while|until|for|rescue|when|and|or|&&|\|\|)\b/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    exports2.rubyEntityPatterns = [
+      // class declarations (class Foo, class Foo < Bar)
+      {
+        regex: /^[ \t]*class\s+([A-Z]\w*(?:::[A-Z]\w*)*)\s*(?:<\s*\S+)?\s*$/gm,
+        type: "class"
+      },
+      // module declarations
+      {
+        regex: /^[ \t]*module\s+([A-Z]\w*(?:::[A-Z]\w*)*)\s*$/gm,
+        type: "class"
+      },
+      // singleton methods: def self.method_name[!?=]
+      {
+        regex: /^[ \t]*def\s+self\.([A-Za-z_]\w*[!?=]?)\s*(?:\(|$)/gm,
+        type: "function"
+      },
+      // instance methods: def method_name[!?=]
+      {
+        regex: /^[ \t]*def\s+([A-Za-z_]\w*[!?=]?)\s*(?:\(|$)/gm,
+        type: "function"
+      }
+    ];
+    function extractEntities(code, _filePath) {
+      const entities = [];
+      for (const { regex, type } of exports2.rubyEntityPatterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const rawName = match[1];
+          if (!rawName)
+            continue;
+          const name = type === "function" ? sanitizeMethodName(rawName) : rawName;
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          if (entities.some((e) => e.name === name && e.line === line))
+            continue;
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, rawName) : "low"
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const requirePattern = /^[ \t]*require\s+['"]([^'"]+)['"]/gm;
+      let match;
+      while ((match = requirePattern.exec(code)) !== null) {
+        const source = match[1];
+        const name = source.split("/").pop() || source;
+        imports.push({ source, names: [name], isLocal: false });
+      }
+      const relPattern = /^[ \t]*require_relative\s+['"]([^'"]+)['"]/gm;
+      while ((match = relPattern.exec(code)) !== null) {
+        const source = match[1];
+        const name = source.split("/").pop() || source;
+        imports.push({ source, names: [name], isLocal: true });
+      }
+      const loadPattern = /^[ \t]*load\s+['"]([^'"]+)['"]/gm;
+      while ((match = loadPattern.exec(code)) !== null) {
+        const source = match[1];
+        const name = source.split("/").pop()?.replace(/\.rb$/, "") || source;
+        imports.push({ source, names: [name], isLocal: true });
+      }
+      const mixinPattern = /^[ \t]*(?:include|extend|prepend)\s+([A-Z]\w*(?:::[A-Z]\w*)*)/gm;
+      while ((match = mixinPattern.exec(code)) !== null) {
+        const source = match[1];
+        const name = source.split("::").pop() || source;
+        imports.push({ source, names: [name], isLocal: false });
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const exports3 = [];
+      const typePattern = /^(?:class|module)\s+([A-Z]\w*(?:::[A-Z]\w*)*)/gm;
+      let match;
+      while ((match = typePattern.exec(code)) !== null) {
+        exports3.push(match[1]);
+      }
+      const attrPattern = /^[ \t]*attr_(?:reader|writer|accessor)\s+(.+)$/gm;
+      while ((match = attrPattern.exec(code)) !== null) {
+        const syms = match[1].split(",").map((s) => s.trim().replace(/^:/, ""));
+        exports3.push(...syms.filter(Boolean));
+      }
+      const pubFuncPattern = /^[ \t]*(?:module_function|public)\s+def\s+([A-Za-z_]\w*[!?=]?)/gm;
+      while ((match = pubFuncPattern.exec(code)) !== null) {
+        exports3.push(sanitizeMethodName(match[1]));
+      }
+      return [...new Set(exports3)];
+    }
+    var RubyParser = {
+      lang: "ruby",
+      extensions: [".rb", ".rake", ".gemspec"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.rubyEntityPatterns
+    };
+    (0, registry_1.registerParser)(RubyParser);
+  }
+});
+
+// dist/languages/swift.js
+var require_swift = __commonJS({
+  "dist/languages/swift.js"(exports2) {
+    "use strict";
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.swiftEntityPatterns = void 0;
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const defRegex = new RegExp(`(?:^|\\s)(?:func\\s+${escapeRegex(name)}|init|deinit|subscript)\\s*(?:<[^>]*>)?\\s*\\(`, "m");
+      const defLineIdx = lines.findIndex((l) => defRegex.test(l));
+      if (defLineIdx === -1)
+        return "low";
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const ch of line) {
+          if (ch === "{") {
+            braceCount++;
+            started = true;
+          } else if (ch === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0)
+          break;
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|else\s+if|else|for\s|while|repeat|switch|case|catch|guard|&&|\|\|)\b/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    exports2.swiftEntityPatterns = [
+      // class (including final class, open class, public class)
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate|open|final|@MainActor)\s+)*class\s+([A-Za-z_]\w*)(?:\s*<[^{]*?)?\s*(?::\s*[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // struct
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate)\s+)*struct\s+([A-Za-z_]\w*)(?:\s*<[^{]*?)?\s*(?::\s*[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // enum
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate|indirect)\s+)*enum\s+([A-Za-z_]\w*)(?:\s*<[^{]*?)?\s*(?::\s*[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // protocol
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate)\s+)*protocol\s+([A-Za-z_]\w*)(?:\s*<[^{]*?)?\s*(?::\s*[^{]+)?\s*\{/gm,
+        type: "interface"
+      },
+      // actor (Swift 5.5+)
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate|distributed)\s+)*actor\s+([A-Za-z_]\w*)(?:\s*:\s*[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // extension (cross-file method container, same type as class in Python extractor)
+      // Supports: extension Foo, extension Array where Element: Comparable
+      {
+        regex: /^[ \t]*extension\s+([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)(?:\s*<[^>{]*>)?(?:\s*:\s*[^{]+)?(?:\s+where\s+[^{]+)?\s*\{/gm,
+        type: "class"
+      },
+      // function declarations (including mutating, static, class func, override, async, throws)
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate|open|override|static|class|mutating|nonmutating|dynamic|final|required|convenience|async|throws|rethrows|nonisolated|@discardableResult|@objc|@MainActor)\s+)*func\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
+        type: "function"
+      },
+      // init declarations
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate|override|required|convenience)\s+)*init\??\s*(?:<[^>]*>)?\s*\(/gm,
+        type: "function"
+      },
+      // deinit
+      {
+        regex: /^[ \t]*deinit\s*\{/gm,
+        type: "function"
+      },
+      // subscript
+      {
+        regex: /^[ \t]*(?:(?:public|internal|private|fileprivate|static|override)\s+)*subscript\s*(?:<[^>]*>)?\s*\(/gm,
+        type: "function"
+      }
+    ];
+    function extractEntities(code, _filePath) {
+      const entities = [];
+      for (const { regex, type } of exports2.swiftEntityPatterns) {
+        regex.lastIndex = 0;
+        let match;
+        while ((match = regex.exec(code)) !== null) {
+          const name = match[1] ?? (/\binit\b/.test(match[0]) ? "init" : /\bdeinit\b/.test(match[0]) ? "deinit" : "subscript");
+          const upToMatch = code.slice(0, match.index);
+          const line = upToMatch.split("\n").length;
+          if (entities.some((e) => e.name === name && e.line === line))
+            continue;
+          entities.push({
+            name,
+            type,
+            line,
+            complexity: type === "function" ? estimateComplexity(code, name) : "low"
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const imports = [];
+      const importPattern = /^[ \t]*import\s+(?:(?:class|struct|enum|func|var|let|typealias)\s+)?([A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*)/gm;
+      let match;
+      while ((match = importPattern.exec(code)) !== null) {
+        const fullPath = match[1];
+        const moduleName = fullPath.split(".")[0];
+        if (["class", "struct", "enum", "func", "var", "let", "typealias"].includes(moduleName))
+          continue;
+        imports.push({
+          source: moduleName,
+          names: [moduleName],
+          isLocal: false
+        });
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const exports3 = [];
+      const publicPatterns = [
+        // public/open class, struct, enum, protocol, actor, extension
+        /^(?:(?:public|open|final)\s+)*(?:class|struct|enum|protocol|actor)\s+([A-Za-z_]\w*)/gm,
+        // public extension is not really an export, but surfaces it for graph linking
+        /^(?:public\s+)?extension\s+([A-Za-z_]\w*)/gm,
+        // public func
+        /^[ \t]*(?:public|open)\s+(?:(?:static|class|override|mutating|async|throws|nonisolated)\s+)*func\s+([A-Za-z_]\w*)/gm,
+        // public var / let
+        /^[ \t]*(?:public|open)\s+(?:(?:static|class|lazy|private\(set\)|internal\(set\))\s+)*(?:var|let)\s+([A-Za-z_]\w*)/gm,
+        // public init
+        /^[ \t]*(?:public|open)\s+(?:required\s+|convenience\s+)?init/gm
+      ];
+      for (const pattern of publicPatterns) {
+        let match;
+        while ((match = pattern.exec(code)) !== null) {
+          if (match[1])
+            exports3.push(match[1]);
+        }
+      }
+      return [...new Set(exports3)];
+    }
+    var SwiftParser = {
+      lang: "swift",
+      extensions: [".swift"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.swiftEntityPatterns
+    };
+    (0, registry_1.registerParser)(SwiftParser);
   }
 });
 
@@ -483,13 +1694,17 @@ var require_parser = __commonJS({
       const parser = (0, registry_1.getLanguageParser)(ext);
       if (!parser)
         return null;
+      const isHashCommentLang = [".py", ".rb", ".sh", ".bash", ".ps1"].includes(ext);
+      const commentChar = isHashCommentLang ? "#" : "//";
       const cleanCode = code.split("\n").map((line) => {
-        const commentIndex = line.indexOf("//");
+        const commentIndex = line.indexOf(commentChar);
         if (commentIndex === -1)
           return line;
         const before = line.slice(0, commentIndex);
-        const inString = (before.match(/"/g) || []).length % 2 !== 0 || (before.match(/'/g) || []).length % 2 !== 0;
-        return inString ? line : line.slice(0, commentIndex);
+        const inDouble = (before.match(/"/g) || []).length % 2 !== 0;
+        const inSingle = (before.match(/'/g) || []).length % 2 !== 0;
+        const inBacktick = (before.match(/`/g) || []).length % 2 !== 0;
+        return inDouble || inSingle || inBacktick ? line : line.slice(0, commentIndex);
       }).join("\n");
       const lines = code.split("\n").length;
       const entities = parser.extractEntities(cleanCode, filePath);
@@ -1049,6 +2264,12 @@ Object.defineProperty(exports, "__esModule", { value: true });
 require_javascript();
 require_python();
 require_go();
+require_csharp();
+require_java();
+require_kotlin();
+require_php();
+require_ruby();
+require_swift();
 var fs_1 = __importDefault(require("fs"));
 var collector_1 = require_collector();
 var parser_1 = require_parser();
