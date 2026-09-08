@@ -3,19 +3,46 @@
 [![npm version](https://img.shields.io/npm/v/depgraph-core.svg)](https://www.npmjs.com/package/depgraph-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**DepGraph Core** is a powerful static analysis CLI that maps code dependencies and simulates the ripple-effect impact of changes in JavaScript, TypeScript, Python, and Go projects. By parsing imports, exports, functions, and classes, DepGraph constructs a comprehensive dependency graph, computes centrality metrics, and generates impact simulations — helping you prevent regression bugs in large codebases.
+**DepGraph Core** is a powerful static analysis CLI that maps code dependencies and simulates the ripple-effect impact of changes across multi-language codebases — supporting JavaScript, TypeScript, Python, Go, C#, Java, Kotlin, PHP, Ruby, and Swift. By parsing imports, exports, functions, classes, interfaces, and methods, DepGraph constructs a comprehensive dependency graph, computes centrality metrics, and generates impact simulations — helping you prevent regression bugs in large systems.
 
 ---
 
 ## 🚀 Key Features
 
-- 🔍 **Automated Code Parsing**: Supports JS, TS, React (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`), Python (`.py`), and Go (`.go`) — extracting functions, classes, interfaces, types, React hooks/components, and Express routes.
-- 🕸️ **Dependency Graph Reconstruction**: Resolves local imports and links entities across files to build a full topology map of your codebase.
+- 🔍 **Multi-Language AST & Regex Code Parsing**: Comprehensive native extractors for **10 languages**:
+  - **JavaScript / TypeScript / React** (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`)
+  - **Python** (`.py`)
+  - **Go** (`.go`)
+  - **C#** (`.cs`)
+  - **Java** (`.java`)
+  - **Kotlin** (`.kt`, `.kts`)
+  - **PHP** (`.php`)
+  - **Ruby** (`.rb`)
+  - **Swift** (`.swift`)
+- 🕸️ **Dependency Graph Reconstruction**: Resolves local imports, aliases, namespace packages, and cross-file relationships to build a full topology map of your codebase.
 - 📈 **Metrics & Centrality Analysis**: Calculates in-degree, out-degree, and centrality scores for every entity to automatically identify **Critical Nodes**.
 - 💥 **Impact Simulation Engine**: Runs a reverse BFS to model the cascading impact of changing a specific function or class. Generates a risk score, lists affected nodes, and provides an actionable testing plan.
-- 🧬 **Git Diff Integration**: Automatically detects changed entities from your git history (uncommitted changes, a specific commit, or a branch comparison) and runs impact simulation on every changed function — no manual target needed.
+- 🧬 **Git Diff Integration**: Automatically detects changed entities from your git history (uncommitted changes, a specific commit, or a branch comparison) across all supported languages and runs impact simulation on every changed symbol.
 - 🖥️ **Rich CLI Interface**: Colorized, human-readable output with a `--no-color` flag for CI/CD pipelines.
 - 💾 **Detailed JSON Output**: Exports a comprehensive report containing graph structure, metrics, and simulation results.
+
+---
+
+## 🌐 Supported Languages
+
+DepGraph Core provides native parsing and symbol extraction across 10 major programming languages:
+
+| Language | Extensions | Extracted Entities | Import & Resolution Features |
+| :--- | :--- | :--- | :--- |
+| **JavaScript / TypeScript** | `.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs` | Functions, Async functions, Classes, Methods, Interfaces, Type aliases, React Components, Hooks, Express routes | ESM (`import`/`export`), dynamic `import()`, CommonJS (`require()`, `module.exports`), named & default imports |
+| **Python** | `.py` | Functions, Async functions, Classes, Methods | `import x`, `from x import y`, aliases (`as`), wildcard imports (`*`), `__all__` exports |
+| **Go** | `.go` | Functions, Struct methods (pointer & value receivers), Structs, Interfaces | Single & grouped `import (...)`, import aliases, exported symbols (capitalized identifier convention) |
+| **C#** | `.cs` | Classes, Records, Interfaces, Structs, Enums, Methods, Namespaces | Single & global `using`, static imports (`using static`), using aliases, public/internal exports |
+| **Java** | `.java` | Classes, Interfaces, Records, Enums, Methods, Constructors | Single imports, wildcard imports (`.*`), static imports (`import static`), package tracking, public/protected exports |
+| **Kotlin** | `.kt`, `.kts` | Classes (data, sealed, abstract, inner), Objects, Companion objects, Interfaces, Functions, Suspend functions | Direct imports, wildcard imports (`.*`), import aliases (`as`), packages |
+| **PHP** | `.php` | Classes (abstract, final), Interfaces, Traits, Enums, Functions, Methods | Namespaces, single & grouped `use` statements, `use ... as` aliases, `require`/`include` file paths |
+| **Ruby** | `.rb` | Classes, Modules, Instance methods, Class methods (`def self.`), `attr_accessor`/`reader`/`writer` | `require`, `require_relative`, `load`, `include`, `extend`, `prepend` |
+| **Swift** | `.swift` | Classes, Structs, Enums, Protocols, Actors, Extensions (including `where` constraints), Functions, Initializers | Module imports, sub-module imports, kind-specifier imports (`import class/func/...`) |
 
 ---
 
@@ -195,7 +222,7 @@ Running impact simulation...
 ✅ Output written to ./depgraph-output.json
 ```
 
-**Supported languages for diff parsing:** JavaScript/TypeScript, Python, Go. Java and C# method signatures are handled via a built-in fallback.
+**Supported languages for diff parsing:** All 10 languages (JavaScript/TypeScript, Python, Go, C#, Java, Kotlin, PHP, Ruby, and Swift) are fully supported via shared entity pattern registries and fallbacks.
 
 ---
 

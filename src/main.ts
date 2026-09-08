@@ -4,6 +4,12 @@
 import './languages/javascript';
 import './languages/python';
 import './languages/go';
+import './languages/csharp';
+import './languages/java';
+import './languages/kotlin';
+import './languages/php';
+import './languages/ruby';
+import './languages/swift';
 import fs from 'fs';
 import { collectFiles } from './stages/collector';
 import { parseFiles } from './stages/parser';

@@ -123,6 +123,26 @@ describe('Python Parser', () => {
     expect(parseFile(f)?.exports).toEqual(expect.arrayContaining(['get_user', 'create_user']));
   });
 
+  it('extracts generic classes and decorated functions', () => {
+    const code = '@dataclass\nclass Repository[T]:\n    def find(self) -> T:\n        pass\n';
+    const f = write('generic.py', code);
+    expect(parseFile(f)?.entities).toContainEqual(expect.objectContaining({ name: 'Repository', type: 'class' }));
+    expect(parseFile(f)?.entities).toContainEqual(expect.objectContaining({ name: 'find', type: 'function' }));
+  });
+
+  it('extracts multi-module import statements', () => {
+    const f = write('multi_import.py', 'import os, sys, json as j\n');
+    const parsed = parseFile(f);
+    expect(parsed?.imports).toContainEqual(expect.objectContaining({ source: 'os', names: ['os'] }));
+    expect(parsed?.imports).toContainEqual(expect.objectContaining({ source: 'sys', names: ['sys'] }));
+    expect(parsed?.imports).toContainEqual(expect.objectContaining({ source: 'json', names: ['json'] }));
+  });
+
+  it('extracts tuple-style __all__', () => {
+    const f = write('tuple_all.py', '__all__ = ("UserService", "get_user")\n');
+    expect(parseFile(f)?.exports).toEqual(expect.arrayContaining(['UserService', 'get_user']));
+  });
+
   it('returns empty exports when no __all__', () => {
     const f = write('a.py', 'def foo():\n    pass\n');
     expect(parseFile(f)?.exports).toEqual([]);
