@@ -58,10 +58,10 @@ Impact level is determined by **BFS depth**:
 
 | Depth | Impact Level | Breaking Change? |
 |---|---|---|
-| 1 | `critical` | ✅ Yes |
-| 2 | `high` | ✅ Yes |
-| 3–4 | `medium` | ❌ No |
-| 5–10 | `low` | ❌ No |
+| 1 | `critical` | Yes |
+| 2 | `high` | Yes |
+| 3–4 | `medium` | No |
+| 5–10 | `low` | No |
 
 Nodes at depth ≤ 2 are flagged as `breakingChange: true` because they directly consume the target's interface.
 

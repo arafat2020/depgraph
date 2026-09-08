@@ -1,4 +1,4 @@
-# 📊 DepGraph Core
+# DepGraph Core
 
 [![npm version](https://img.shields.io/npm/v/depgraph-core.svg)](https://www.npmjs.com/package/depgraph-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -7,9 +7,9 @@
 
 ---
 
-## 🚀 Key Features
+## Key Features
 
-- 🔍 **Multi-Language AST & Regex Code Parsing**: Comprehensive native extractors for **10 languages**:
+- **Multi-Language AST & Regex Code Parsing**: Comprehensive native extractors for **10 languages**:
   - **JavaScript / TypeScript / React** (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`)
   - **Python** (`.py`)
   - **Go** (`.go`)
@@ -19,16 +19,16 @@
   - **PHP** (`.php`)
   - **Ruby** (`.rb`)
   - **Swift** (`.swift`)
-- 🕸️ **Dependency Graph Reconstruction**: Resolves local imports, aliases, namespace packages, and cross-file relationships to build a full topology map of your codebase.
-- 📈 **Metrics & Centrality Analysis**: Calculates in-degree, out-degree, and centrality scores for every entity to automatically identify **Critical Nodes**.
-- 💥 **Impact Simulation Engine**: Runs a reverse BFS to model the cascading impact of changing a specific function or class. Generates a risk score, lists affected nodes, and provides an actionable testing plan.
-- 🧬 **Git Diff Integration**: Automatically detects changed entities from your git history (uncommitted changes, a specific commit, or a branch comparison) across all supported languages and runs impact simulation on every changed symbol.
-- 🖥️ **Rich CLI Interface**: Colorized, human-readable output with a `--no-color` flag for CI/CD pipelines.
-- 💾 **Detailed JSON Output**: Exports a comprehensive report containing graph structure, metrics, and simulation results.
+- **Dependency Graph Reconstruction**: Resolves local imports, aliases, namespace packages, and cross-file relationships to build a full topology map of your codebase.
+- **Metrics & Centrality Analysis**: Calculates in-degree, out-degree, and centrality scores for every entity to automatically identify **Critical Nodes**.
+- **Impact Simulation Engine**: Runs a reverse BFS to model the cascading impact of changing a specific function or class. Generates a risk score, lists affected nodes, and provides an actionable testing plan.
+- **Git Diff Integration**: Automatically detects changed entities from your git history (uncommitted changes, a specific commit, or a branch comparison) across all supported languages and runs impact simulation on every changed symbol.
+- **Rich CLI Interface**: Colorized, human-readable output with a `--no-color` flag for CI/CD pipelines.
+- **Detailed JSON Output**: Exports a comprehensive report containing graph structure, metrics, and simulation results.
 
 ---
 
-## 🌐 Supported Languages
+## Supported Languages
 
 DepGraph Core provides native parsing and symbol extraction across 10 major programming languages:
 
@@ -46,7 +46,7 @@ DepGraph Core provides native parsing and symbol extraction across 10 major prog
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### Global (recommended)
 ```bash
@@ -60,7 +60,7 @@ npx depgraph-core <projectDir> [options]
 
 ---
 
-## 🛠️ CLI Usage
+## CLI Usage
 
 ```bash
 depgraph <projectDir> [options]
@@ -87,7 +87,7 @@ depgraph <projectDir> [options]
 
 ---
 
-## 📖 Examples
+## Examples
 
 ### Standard Usage
 
@@ -113,11 +113,11 @@ depgraph ./src --no-color --output ./ci/depgraph.json
 
 ---
 
-### 🧬 Git Diff Integration
+### Git Diff Integration
 
 `--git-impact` automatically reads your git diff, detects every function or class that changed, and runs an impact simulation for each one — no need to manually select a target entity.
 
-#### ⚙️ How It Works under the Hood
+#### How It Works under the Hood
 
 1. **Git Diff Execution**: Runs the appropriate git command depending on the mode:
    - **Uncommitted Changes**: `git diff HEAD` (detects staged & unstaged changes).
@@ -128,7 +128,7 @@ depgraph ./src --no-color --output ./ci/depgraph.json
 4. **Fallback Parsers**: Contains built-in fallback parser logic for popular OOP languages like Java (`.java`) and C# (`.cs`) to extract method signatures.
 5. **Change Description Generation**: Automatically analyzes added/removed lines in the change hunk to build descriptive labels (e.g. `getUserById: 3 line(s) changed to 2 new line(s)`).
 
-#### 📋 Git Commands Reference
+#### Git Commands Reference
 
 | Mode | CLI Command | Under-the-hood Command | Description |
 | :--- | :--- | :--- | :--- |
@@ -137,7 +137,7 @@ depgraph ./src --no-color --output ./ci/depgraph.json
 | **Specific Commit** | `depgraph ./src --git-impact --commit <sha>` | `git diff <sha>~1 <sha>` | Analyze any commit by its SHA |
 | **Branch Comparison** | `depgraph ./src --git-impact --from main --to feature/auth` | `git diff main...feature/auth` | Compare two branches |
 
-#### 🖥️ CLI Output Example
+#### CLI Output Example
 
 Running `--git-impact` displays a colorized report of detected entities and runs an impact simulation for each one:
 
@@ -146,14 +146,14 @@ Running `--git-impact` displays a colorized report of detected entities and runs
   DepGraph  v1.0.0
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🔍 Scanning .
+Scanning .
 
-📊 Graph Summary
+Graph Summary
    Files  : 27
    Nodes  : 76
    Edges  : 252
 
-🔍 Reading git diff...
+Reading git diff...
 
 Found 2 changed entity(s):
    → slugify  (src/languages/javascript.ts)
@@ -163,7 +163,7 @@ Running impact simulation...
 
 ──────────────────────────────────────────
 
-💥 Impact Simulation
+Impact Simulation
    Target      : slugify__javascript
    Change      : slugify: 16 line(s) added
    Risk Score  : 0
@@ -171,22 +171,22 @@ Running impact simulation...
 
    ✓ No affected nodes found
 
-🧪 Testing Plan
+Testing Plan
    → Test slugify directly after making changes
 
-💡 Recommendations
+Recommendations
    → Standard PR process is sufficient
    → Unit tests for the changed node are enough
 
 ──────────────────────────────────────────
 
-💥 Impact Simulation
+Impact Simulation
    Target      : LanguageParser__registry
    Change      : LanguageParser: 6 line(s) added
    Risk Score  : 100
    Risk Level  : CRITICAL
 
-📋 Affected Nodes (3)
+Affected Nodes (3)
 
    [CRITICAL] extractEntities
    file    : src/languages/go.ts
@@ -206,27 +206,27 @@ Running impact simulation...
    action  : Update extractExports to handle the new interface of LanguageParser
    breaking: YES
 
-🧪 Testing Plan
+Testing Plan
    → Test LanguageParser directly after making changes
    → Regression test extractEntities — direct dependent
    → Regression test extractImports — direct dependent
    → Regression test extractExports — direct dependent
    → Run full test suite — 3 nodes affected
 
-💡 Recommendations
+Recommendations
    → Full team review required before merging
    → Consider a phased rollout
    → Run full regression test suite
    → 3 breaking change(s) must be updated before deploying
 
-✅ Output written to ./depgraph-output.json
+Output written to ./depgraph-output.json
 ```
 
 **Supported languages for diff parsing:** All 10 languages (JavaScript/TypeScript, Python, Go, C#, Java, Kotlin, PHP, Ruby, and Swift) are fully supported via shared entity pattern registries and fallbacks.
 
 ---
 
-## 💥 Impact Simulation Mechanics
+## Impact Simulation Mechanics
 
 When running `--impact` or `--git-impact`, the tool performs:
 
@@ -238,14 +238,14 @@ When running `--impact` or `--git-impact`, the tool performs:
    - Number of medium/low-impact nodes
    - The target node's in-degree
 4. **Risk Level Mapping**:
-   - 🔴 **CRITICAL** (≥ 75): Comprehensive review, phased rollout, full regression testing.
-   - 🟡 **HIGH** (50–74): Tech lead review, feature flag recommended.
-   - 🔵 **MEDIUM** (25–49): Standard peer review, targeted module testing.
-   - 🟢 **LOW** (< 25): Standard PR process is sufficient.
+   - **CRITICAL** (≥ 75): Comprehensive review, phased rollout, full regression testing.
+   - **HIGH** (50–74): Tech lead review, feature flag recommended.
+   - **MEDIUM** (25–49): Standard peer review, targeted module testing.
+   - **LOW** (< 25): Standard PR process is sufficient.
 
 ---
 
-## 📁 Output JSON Schema
+## Output JSON Schema
 
 ```json
 {
@@ -303,7 +303,7 @@ When running `--impact` or `--git-impact`, the tool performs:
 
 ---
 
-## 💻 Development & Contribution
+## Development & Contribution
 
 ### Setup
 ```bash
@@ -324,6 +324,6 @@ npm install
 
 ---
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

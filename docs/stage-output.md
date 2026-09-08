@@ -72,7 +72,7 @@ if (!fs.existsSync(dir)) {
 After a successful write, a summary is printed to stdout:
 
 ```
-✅ Output written to ./depgraph-output.json
+Output written to ./depgraph-output.json
    12 files
    87 nodes
    143 edges
@@ -82,7 +82,7 @@ After a successful write, a summary is printed to stdout:
 If an impact report was included:
 
 ```
-💥 Impact Report included
+Impact Report included
    Target     : getUserById__userService
    Risk Level : HIGH
    Risk Score : 62
