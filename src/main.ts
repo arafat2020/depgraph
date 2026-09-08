@@ -62,7 +62,7 @@ function getFlag(flag: string): string | undefined {
  */
 function printHelp(): void {
   console.log(`
-${bold('DepGraph')} ${dim('v1.0.2')}
+${bold('DepGraph')} ${dim('v1.5.0')}
 ${dim('Dependency mapping · Impact simulation · Developer intelligence')}
 
 ${bold('USAGE')}
@@ -200,18 +200,18 @@ if (args.length === 0 || args.includes('--help') || args.includes('-h')) {
   process.exit(0);
 }
 
-const projectDir   = args[0];
-const outputPath   = getFlag('--output')  ?? './depgraph-output.json';
+const projectDir = args[0];
+const outputPath = getFlag('--output') ?? './depgraph-output.json';
 const impactTarget = getFlag('--impact');
-const impactDesc   = impactTarget
+const impactDesc = impactTarget
   ? (args[args.indexOf('--impact') + 2] ?? 'no description provided')
   : undefined;
 
 // ── git flags ────────────────────────────────────────────
 const gitImpact = args.includes('--git-impact');
 const gitCommit = getFlag('--commit');
-const gitFrom   = getFlag('--from');
-const gitTo     = getFlag('--to');
+const gitFrom = getFlag('--from');
+const gitTo = getFlag('--to');
 
 // determine git mode
 const gitMode = (gitFrom && gitTo)
@@ -259,10 +259,10 @@ try {
 
     const changed = getChangedEntities({
       projectDir,
-      mode:   gitMode as 'uncommitted' | 'last-commit' | 'branches',
+      mode: gitMode as 'uncommitted' | 'last-commit' | 'branches',
       commit: gitCommit,
-      from:   gitFrom,
-      to:     gitTo,
+      from: gitFrom,
+      to: gitTo,
     });
 
     if (changed.length === 0) {

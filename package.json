@@ -1,6 +1,6 @@
 {
   "name": "depgraph-core",
-  "version": "1.0.3",
+  "version": "1.5.0",
   "description": "Dependency mapping and impact simulation for JS/TS projects",
   "main": "depgraph.js",
   "bin": {

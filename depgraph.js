@@ -2298,7 +2298,7 @@ function getFlag(flag) {
 }
 function printHelp() {
   console.log(`
-${bold("DepGraph")} ${dim("v1.0.2")}
+${bold("DepGraph")} ${dim("v1.5.0")}
 ${dim("Dependency mapping \xB7 Impact simulation \xB7 Developer intelligence")}
 
 ${bold("USAGE")}
