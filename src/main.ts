@@ -62,7 +62,7 @@ function getFlag(flag: string): string | undefined {
  */
 function printHelp(): void {
   console.log(`
-${bold('DepGraph')} ${dim('v1.5.0')}
+${bold('DepGraph')} ${dim('v1.5.1')}
 ${dim('Dependency mapping · Impact simulation · Developer intelligence')}
 
 ${bold('USAGE')}
