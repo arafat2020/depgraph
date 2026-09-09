@@ -153,6 +153,7 @@ function resolvePath(
     `${base}.jsx`,
     `${base}/index.ts`,
     `${base}/index.js`,
+    `${base}.dart`,
   ];
 
   for (const candidate of candidates) {
