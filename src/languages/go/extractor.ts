@@ -1,83 +1,10 @@
-import { RawEntity, RawImport } from '../types';
-import { EntityPattern, LanguageParser, registerParser } from './registry';
-import { COMPLEXITY_THRESHOLDS } from '../constants';
+import { RawEntity, RawImport } from '../../types';
+import { goEntityPatterns } from './patterns';
+import { estimateComplexity } from './helpers';
 
-// ─── complexity estimation ──────────────────────────────
+// ─── entity extractor ────────────────────────────────────
 
-/**
- * Estimates the cyclomatic complexity rating of a Go function based on decision/branching keywords.
- * @param code The clean source code of the file.
- * @param name The name of the function to estimate complexity for.
- * @returns A string representing the complexity level ('low', 'medium', or 'high').
- */
-function estimateComplexity(code: string, name: string): string {
-  const lines = code.split('\n');
-  const funcRegex = new RegExp(`func\\s+(?:\\([^)]*\\)\\s+)?${name}\\s*(?:\\[[^\\]]*\\])?\\s*\\(`, 'm');
-  const defLineIdx = lines.findIndex(l => funcRegex.test(l));
-  if (defLineIdx === -1) return 'low';
-
-  let startLine = defLineIdx;
-  while (startLine < lines.length && !lines[startLine].includes('{')) {
-    startLine++;
-  }
-  if (startLine >= lines.length) return 'low';
-
-  let braceCount = 0;
-  let started = false;
-  const bodyLines: string[] = [];
-
-  for (let i = startLine; i < lines.length; i++) {
-    const line = lines[i];
-    for (const char of line) {
-      if (char === '{') {
-        braceCount++;
-        started = true;
-      } else if (char === '}') {
-        braceCount--;
-      }
-    }
-    bodyLines.push(line);
-    if (started && braceCount <= 0) {
-      break;
-    }
-  }
-
-  const body = bodyLines.join('\n');
-  const branches = (body.match(/\b(if|else\s+if|for|switch|case|select|&&|\|\|)\b/g) || []).length;
-
-  if (branches <= COMPLEXITY_THRESHOLDS.low)    return 'low';
-  if (branches <= COMPLEXITY_THRESHOLDS.medium) return 'medium';
-  return 'high';
-}
-
-// ─── entity patterns (module-level so gitdiff can reuse them) ────────────────
-
-/**
- * The entity-matching patterns for Go.
- * Exposed via `entityPatterns` on the parser so gitdiff.ts can reuse them
- * against git diff context lines without duplicating any regex.
- */
-export const goEntityPatterns: EntityPattern[] = [
-  // functions and methods with optional receiver and type parameters (generics)
-  {
-    regex: /^func\s+(?:\([^)]*\)\s+)?([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s*\(/gm,
-    type: 'function'
-  },
-  // type declarations (structs, interfaces) with optional type parameters
-  {
-    regex: /^type\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s+(?:struct|interface)/gm,
-    type: 'class'
-  },
-  // type aliases and custom types (e.g. type HandlerFunc func(...), type MyInt int)
-  {
-    regex: /^type\s+([A-Za-z_]\w*)\s*(?:\[[^\]]*\])?\s+(?!(?:struct|interface)\b)[A-Za-z_\[\]\*]/gm,
-    type: 'type'
-  }
-];
-
-// ─── entity extractor ───────────────────────────────────
-
-function extractEntities(code: string, filePath: string): RawEntity[] {
+export function extractEntities(code: string, filePath: string): RawEntity[] {
   const entities: RawEntity[] = [];
 
   for (const { regex, type } of goEntityPatterns) {
@@ -149,9 +76,9 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
   return entities;
 }
 
-// ─── import extractor ───────────────────────────────────
+// ─── import extractor ────────────────────────────────────
 
-function extractImports(code: string): RawImport[] {
+export function extractImports(code: string): RawImport[] {
   const imports: RawImport[] = [];
 
   // import "pkg" or import alias "pkg"
@@ -195,9 +122,9 @@ function extractImports(code: string): RawImport[] {
   return imports;
 }
 
-// ─── export extractor ───────────────────────────────────
+// ─── export extractor ────────────────────────────────────
 
-function extractExports(code: string): string[] {
+export function extractExports(code: string): string[] {
   // In Go, any top-level identifier starting with an uppercase letter is exported
   const exports: string[] = [];
 
@@ -254,20 +181,3 @@ function extractExports(code: string): string[] {
 
   return [...new Set(exports)];
 }
-
-// ─── register ───────────────────────────────────────────
-
-/**
- * The language parser implementation for Go source files.
- */
-const GoParser: LanguageParser = {
-  lang: 'go',
-  extensions: ['.go'],
-  extractEntities,
-  extractImports,
-  extractExports,
-  entityPatterns: goEntityPatterns,
-};
-
-registerParser(GoParser);
-

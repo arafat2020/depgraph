@@ -11,6 +11,7 @@ import './languages/php';
 import './languages/ruby';
 import './languages/swift';
 import './languages/dart';
+import './languages/rust';
 import fs from 'fs';
 import { collectFiles } from './stages/collector';
 import { parseFiles } from './stages/parser';

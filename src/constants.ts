@@ -25,7 +25,7 @@ export const SUPPORTED_EXTS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs',
   '.py', '.go', '.java', '.cs', '.rb',
   '.php', '.swift', '.kt', '.vue', '.svelte',
-  '.dart'
+  '.dart', '.rs'
 ]);
 
 /**

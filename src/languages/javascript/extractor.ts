@@ -1,143 +1,18 @@
-import { RawEntity, RawImport } from '../types';
-import { EntityPattern, LanguageParser, registerParser } from './registry';
-import { COMPLEXITY_THRESHOLDS } from '../constants';
+import { RawEntity, RawImport } from '../../types';
+import { jsEntityPatterns } from './patterns';
+import { estimateComplexity } from './helpers';
 
-// ─── helpers ────────────────────────────────────────────
-
-/**
- * Estimates the cyclomatic complexity rating of a function based on the count of decision/branching keywords.
- * @param code The clean source code of the file.
- * @param name The name of the function to estimate complexity for.
- * @returns A string representing the complexity level ('low', 'medium', or 'high').
- */
-function estimateComplexity(code: string, name: string): string {
-  const lines = code.split('\n');
-  const nameRegex = new RegExp(
-    `(?:(?:async\\s+)?function(?:\\s*\\*|\\s+)|(?:const|let|var)\\s+)${name}\\b|\\b${name}\\s*(?:<[^>]*>)?\\s*\\(`,
-    'm'
-  );
-  const defLineIdx = lines.findIndex(l => nameRegex.test(l));
-  if (defLineIdx === -1) return 'low';
-
-  let startLine = defLineIdx;
-  while (startLine < lines.length && !lines[startLine].includes('{')) {
-    startLine++;
-  }
-  if (startLine >= lines.length) return 'low';
-
-  let braceCount = 0;
-  let started = false;
-  const bodyLines: string[] = [];
-
-  for (let i = startLine; i < lines.length; i++) {
-    const line = lines[i];
-    for (const char of line) {
-      if (char === '{') {
-        braceCount++;
-        started = true;
-      } else if (char === '}') {
-        braceCount--;
-      }
-    }
-    bodyLines.push(line);
-    if (started && braceCount <= 0) {
-      break;
-    }
-  }
-
-  const body = bodyLines.join('\n');
-  const branches = (body.match(/\b(if|else\s+if|for|while|switch|case|catch|&&|\|\||\?\?)\b|\?[^:]*:/g) || []).length;
-
-  if (branches <= COMPLEXITY_THRESHOLDS.low)    return 'low';
-  if (branches <= COMPLEXITY_THRESHOLDS.medium) return 'medium';
-  return 'high';
-}
-
-// ─── entity patterns (module-level so gitdiff can reuse them) ────────────────
+// ─── entity extractor ────────────────────────────────────
 
 /**
- * The entity-matching patterns for JavaScript and TypeScript.
- * Exposed via `entityPatterns` on the parser so gitdiff.ts can reuse them
- * against git diff context lines without duplicating any regex.
- */
-export const jsEntityPatterns: EntityPattern[] = [
-  // React components: wrapped in memo/forwardRef
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+([A-Z]\w*)\s*=\s*(?:React\.)?(?:memo|forwardRef)\(/gm,
-    type: 'component'
-  },
-  // React components: PascalCase arrow functions
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+([A-Z]\w*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_]\w*)\s*=>/gm,
-    type: 'component'
-  },
-  // React components: PascalCase function declarations
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+([A-Z]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
-    type: 'component'
-  },
-  // React hooks: camelCase starting with "use" (arrow functions or const assignments)
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?(?:const|let|var)\s+(use[A-Z]\w*)\s*=/gm,
-    type: 'hook'
-  },
-  // React hooks: camelCase starting with "use" (function declarations)
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function\s+(use[A-Z]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
-    type: 'hook'
-  },
-  // regular and async function declarations (including generator functions)
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?(?:async\s+)?function(?:\s*\*\s*|\s+)([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm,
-    type: 'function'
-  },
-  // arrow functions assigned to const / let / var
-  {
-    regex: /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_]\w*)\s*=>/gm,
-    type: 'function'
-  },
-  // function expressions assigned to const / let / var
-  {
-    regex: /^(?:export\s+)?(?:const|let|var)\s+([A-Za-z_]\w*)\s*=\s*(?:async\s*)?function/gm,
-    type: 'function'
-  },
-  // classes (regular, exported, abstract)
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?(?:abstract\s+)?class\s+([A-Za-z_]\w*)/gm,
-    type: 'class'
-  },
-  // TypeScript interfaces
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?interface\s+([A-Za-z_]\w*)/gm,
-    type: 'interface'
-  },
-  // TypeScript types
-  {
-    regex: /^(?:export\s+)?(?:default\s+)?type\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*=/gm,
-    type: 'type'
-  },
-  // TypeScript enums (regular or const enum)
-  {
-    regex: /^(?:export\s+)?(?:const\s+)?enum\s+([A-Za-z_]\w*)/gm,
-    type: 'class'
-  },
-  // Express / router routes (capture group 1 = method, group 2 = path — skipped in gitdiff context matching)
-  {
-    regex: /(?:app|router|server)\.(get|post|put|delete|patch|options|head)\s*\(\s*['"]([^'"]+)['"]/gm,
-    type: 'api'
-  },
-];
-
-// ─── entity extractor ───────────────────────────────────
-
-/**
- * Extracts raw entities (React components, hooks, functions, classes, routes, etc.) from clean JavaScript or TypeScript source code.
+ * Extracts raw entities (React components, hooks, functions, classes, routes, etc.)
+ * from clean JavaScript or TypeScript source code.
  * Uses regular expression heuristics to discover declarations.
  * @param code The clean source code of the file (without single-line comments).
  * @param filePath The file path of the source file.
  * @returns An array of raw extracted code entities.
  */
-function extractEntities(code: string, filePath: string): RawEntity[] {
+export function extractEntities(code: string, filePath: string): RawEntity[] {
   const entities: RawEntity[] = [];
 
   for (const { regex, type } of jsEntityPatterns) {
@@ -174,14 +49,15 @@ function extractEntities(code: string, filePath: string): RawEntity[] {
   return entities;
 }
 
-// ─── import extractor ───────────────────────────────────
+// ─── import extractor ────────────────────────────────────
 
 /**
- * Extracts raw imports from clean source code, detecting ESM imports (`import`) and CommonJS `require` statements.
+ * Extracts raw imports from clean source code, detecting ESM imports (`import`)
+ * and CommonJS `require` statements.
  * @param code The clean source code of the file.
  * @returns An array of raw extracted import structures.
  */
-function extractImports(code: string): RawImport[] {
+export function extractImports(code: string): RawImport[] {
   const imports: RawImport[] = [];
 
   // 1. Combined default + named imports:
@@ -315,14 +191,15 @@ function extractImports(code: string): RawImport[] {
   return imports;
 }
 
-// ─── export extractor ───────────────────────────────────
+// ─── export extractor ────────────────────────────────────
 
 /**
- * Extracts exported entity names from clean source code, including inline exports and export list declarations.
+ * Extracts exported entity names from clean source code, including inline exports
+ * and export list declarations.
  * @param code The clean source code of the file.
  * @returns An array of exported entity identifier names.
  */
-function extractExports(code: string): string[] {
+export function extractExports(code: string): string[] {
   const exports: string[] = [];
 
   // Inline declarations: export [default] [async/abstract/const/etc] function/class/const/type/interface/enum Name
@@ -362,19 +239,3 @@ function extractExports(code: string): string[] {
 
   return [...new Set(exports)];
 }
-
-// ─── register ───────────────────────────────────────────
-
-/**
- * The language parser implementation for JavaScript and TypeScript source files.
- */
-const JavaScriptParser: LanguageParser = {
-  lang: 'js',
-  extensions: ['.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx'],
-  extractEntities,
-  extractImports,
-  extractExports,
-  entityPatterns: jsEntityPatterns,
-};
-
-registerParser(JavaScriptParser);

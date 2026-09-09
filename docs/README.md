@@ -18,6 +18,7 @@ This folder explains how every moving part of the compiler works so you can cont
 | [stage-impact.md](./stage-impact.md) | Stage 5 — Impact simulation (BFS + risk scoring) |
 | [stage-output.md](./stage-output.md) | Stage 6 — JSON report generation |
 | [language-registry.md](./language-registry.md) | The language plugin system — how to add a new language |
+| [parser-conventions.md](./parser-conventions.md) | Parser conventions — single-file vs modular packages and coding standards |
 | [data-types.md](./data-types.md) | All shared TypeScript interfaces, explained |
 
 ---

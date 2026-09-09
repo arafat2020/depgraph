@@ -3,13 +3,13 @@
 [![npm version](https://img.shields.io/npm/v/depgraph-core.svg)](https://www.npmjs.com/package/depgraph-core)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**DepGraph Core** is a powerful static analysis CLI that maps code dependencies and simulates the ripple-effect impact of changes across multi-language codebases — supporting JavaScript, TypeScript, Python, Go, C#, Java, Kotlin, PHP, Ruby, and Swift. By parsing imports, exports, functions, classes, interfaces, and methods, DepGraph constructs a comprehensive dependency graph, computes centrality metrics, and generates impact simulations — helping you prevent regression bugs in large systems.
+**DepGraph Core** is a powerful static analysis CLI that maps code dependencies and simulates the ripple-effect impact of changes across multi-language codebases — supporting JavaScript, TypeScript, Python, Go, C#, Java, Kotlin, PHP, Ruby, Swift, and Rust. By parsing imports, exports, functions, classes, interfaces, and methods, DepGraph constructs a comprehensive dependency graph, computes centrality metrics, and generates impact simulations — helping you prevent regression bugs in large systems.
 
 ---
 
 ## Key Features
 
-- **Multi-Language AST & Regex Code Parsing**: Comprehensive native extractors for **10 languages**:
+- **Multi-Language AST & Regex Code Parsing**: Comprehensive native extractors for **11 languages**:
   - **JavaScript / TypeScript / React** (`.js`, `.jsx`, `.ts`, `.tsx`, `.mjs`, `.cjs`)
   - **Python** (`.py`)
   - **Go** (`.go`)
@@ -19,6 +19,7 @@
   - **PHP** (`.php`)
   - **Ruby** (`.rb`)
   - **Swift** (`.swift`)
+  - **Rust** (`.rs`)
 - **Dependency Graph Reconstruction**: Resolves local imports, aliases, namespace packages, and cross-file relationships to build a full topology map of your codebase.
 - **Metrics & Centrality Analysis**: Calculates in-degree, out-degree, and centrality scores for every entity to automatically identify **Critical Nodes**.
 - **Impact Simulation Engine**: Runs a reverse BFS to model the cascading impact of changing a specific function or class. Generates a risk score, lists affected nodes, and provides an actionable testing plan.
@@ -30,7 +31,7 @@
 
 ## Supported Languages
 
-DepGraph Core provides native parsing and symbol extraction across 10 major programming languages:
+DepGraph Core provides native parsing and symbol extraction across 11 major programming languages:
 
 | Language | Extensions | Extracted Entities | Import & Resolution Features |
 | :--- | :--- | :--- | :--- |
@@ -43,6 +44,7 @@ DepGraph Core provides native parsing and symbol extraction across 10 major prog
 | **PHP** | `.php` | Classes (abstract, final), Interfaces, Traits, Enums, Functions, Methods | Namespaces, single & grouped `use` statements, `use ... as` aliases, `require`/`include` file paths |
 | **Ruby** | `.rb` | Classes, Modules, Instance methods, Class methods (`def self.`), `attr_accessor`/`reader`/`writer` | `require`, `require_relative`, `load`, `include`, `extend`, `prepend` |
 | **Swift** | `.swift` | Classes, Structs, Enums, Protocols, Actors, Extensions (including `where` constraints), Functions, Initializers | Module imports, sub-module imports, kind-specifier imports (`import class/func/...`) |
+| **Rust** | `.rs` | Functions, Structs (named & tuple fields), Enums (tuple & struct variants), Traits, Impl blocks, Methods | Single & grouped `use` statements, `crate::`/`super::`/`self::` modules, aliases (`as`) |
 
 ---
 
@@ -222,7 +224,7 @@ Recommendations
 Output written to ./depgraph-output.json
 ```
 
-**Supported languages for diff parsing:** All 10 languages (JavaScript/TypeScript, Python, Go, C#, Java, Kotlin, PHP, Ruby, and Swift) are fully supported via shared entity pattern registries and fallbacks.
+**Supported languages for diff parsing:** All 11 languages (JavaScript/TypeScript, Python, Go, C#, Java, Kotlin, PHP, Ruby, Swift, and Rust) are fully supported via shared entity pattern registries and fallbacks.
 
 ---
 

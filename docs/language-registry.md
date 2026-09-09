@@ -104,20 +104,21 @@ These are **side-effect imports** (no named export is consumed). They exist pure
 
 ## Currently Registered Languages
 
-| File | `lang` | Extensions |
-|---|---|---|
-| `javascript.ts` | `js` | `.js` `.jsx` `.mjs` `.cjs` `.ts` `.tsx` |
-| `python.ts` | `py` | `.py` |
+| Module / File | `lang` | Extensions | Organization Tier |
+|---|---|---|---|
+| `javascript.ts` | `js` | `.js` `.jsx` `.mjs` `.cjs` `.ts` `.tsx` | Tier 1 (Single-file) |
+| `python.ts` | `py` | `.py` | Tier 1 (Single-file) |
+| `go.ts` | `go` | `.go` | Tier 1 (Single-file) |
+| `java.ts` | `java` | `.java` | Tier 1 (Single-file) |
+| `csharp.ts` | `csharp` | `.cs` | Tier 1 (Single-file) |
+| `kotlin.ts` | `kotlin` | `.kt` `.kts` | Tier 1 (Single-file) |
+| `php.ts` | `php` | `.php` | Tier 1 (Single-file) |
+| `ruby.ts` | `ruby` | `.rb` | Tier 1 (Single-file) |
+| `swift.ts` | `swift` | `.swift` | Tier 1 (Single-file) |
+| `dart/` | `dart` | `.dart` | Tier 2 (Modular package) |
+| `rust/` | `rust` | `.rs` | Tier 2 (Modular package) |
 
-The following language files exist as stubs (imported but with minimal or no implementation yet):
-
-- `java.ts`
-- `csharp.ts`
-- `go.ts`
-- `kotlin.ts`
-- `php.ts`
-- `ruby.ts`
-- `swift.ts`
+> For architectural guidelines on choosing between Tier 1 and Tier 2, see [parser-conventions.md](./parser-conventions.md).
 
 ---
 

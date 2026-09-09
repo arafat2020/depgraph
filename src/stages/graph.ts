@@ -142,7 +142,18 @@ function resolvePath(
   allFiles: ParsedFile[]
 ): string | null {
   const fromDir = path.dirname(fromFile);
-  const base    = path.join(fromDir, importSource);
+  let normalizedSource = importSource;
+
+  // Handle Rust module prefixes
+  if (normalizedSource.startsWith('crate::')) {
+    normalizedSource = normalizedSource.slice(7).replace(/::/g, '/');
+  } else if (normalizedSource.startsWith('super::')) {
+    normalizedSource = '../' + normalizedSource.slice(7).replace(/::/g, '/');
+  } else if (normalizedSource.startsWith('self::')) {
+    normalizedSource = './' + normalizedSource.slice(6).replace(/::/g, '/');
+  }
+
+  const base = path.join(fromDir, normalizedSource);
 
   // try these extensions in order
   const candidates = [
@@ -154,6 +165,7 @@ function resolvePath(
     `${base}/index.ts`,
     `${base}/index.js`,
     `${base}.dart`,
+    `${base}.rs`,
   ];
 
   for (const candidate of candidates) {
@@ -161,6 +173,24 @@ function resolvePath(
     const normalized = candidate.replace(/\\/g, '/');
     const found = allFiles.find(f => f.filePath.replace(/\\/g, '/') === normalized);
     if (found) return found.filePath;
+  }
+
+  // Also check parent file if the import path includes the item name (e.g. crate::models::UserModel -> models.rs)
+  const parentBase = path.dirname(base);
+  if (parentBase && parentBase !== base) {
+    const parentCandidates = [
+      `${parentBase}.rs`,
+      `${parentBase}.ts`,
+      `${parentBase}.tsx`,
+      `${parentBase}.js`,
+      `${parentBase}.jsx`,
+      `${parentBase}.dart`,
+    ];
+    for (const candidate of parentCandidates) {
+      const normalized = candidate.replace(/\\/g, '/');
+      const found = allFiles.find(f => f.filePath.replace(/\\/g, '/') === normalized);
+      if (found) return found.filePath;
+    }
   }
 
   return null;

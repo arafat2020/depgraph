@@ -64,7 +64,8 @@ var require_constants = __commonJS({
       ".kt",
       ".vue",
       ".svelte",
-      ".dart"
+      ".dart",
+      ".rs"
     ]);
     exports2.MAX_FILE_SIZE = 3e5;
     exports2.MAX_BFS_DEPTH = 10;
@@ -2594,6 +2595,877 @@ var require_dart = __commonJS({
   }
 });
 
+// dist/languages/rust.js
+var require_rust = __commonJS({
+  "dist/languages/rust.js"(exports2) {
+    "use strict";
+    var __importDefault2 = exports2 && exports2.__importDefault || function(mod) {
+      return mod && mod.__esModule ? mod : { "default": mod };
+    };
+    Object.defineProperty(exports2, "__esModule", { value: true });
+    exports2.RustParser = exports2.rustEntityPatterns = exports2.RUST_TRAIT_METHOD_BLOCKLIST = void 0;
+    exports2._fileStem = _fileStem;
+    exports2._makeId = _makeId;
+    exports2.cleanRustComments = cleanRustComments;
+    exports2._splitBalanced = _splitBalanced;
+    exports2._findMatchingBrace = _findMatchingBrace;
+    exports2._rustCollectTypeRefs = _rustCollectTypeRefs;
+    exports2.estimateComplexity = estimateComplexity;
+    exports2.extractRust = extractRust;
+    var fs_12 = __importDefault2(require("fs"));
+    var path_1 = __importDefault2(require("path"));
+    var registry_1 = require_registry();
+    var constants_1 = require_constants();
+    exports2.RUST_TRAIT_METHOD_BLOCKLIST = /* @__PURE__ */ new Set([
+      "new",
+      "default",
+      "parse",
+      "from_str",
+      "now",
+      "clone",
+      "into",
+      "from",
+      "to_string",
+      "to_owned",
+      "len",
+      "is_empty",
+      "iter",
+      "next",
+      "build",
+      "start",
+      "run",
+      "init",
+      "app",
+      "get",
+      "set",
+      "push",
+      "pop",
+      "insert",
+      "remove",
+      "contains",
+      "collect",
+      "map",
+      "filter",
+      "unwrap",
+      "expect",
+      "ok",
+      "err",
+      "some",
+      "none",
+      "send",
+      "recv",
+      "lock",
+      "read",
+      "write"
+    ]);
+    var RUST_PRIMITIVES = /* @__PURE__ */ new Set([
+      "bool",
+      "char",
+      "str",
+      "i8",
+      "i16",
+      "i32",
+      "i64",
+      "i128",
+      "isize",
+      "u8",
+      "u16",
+      "u32",
+      "u64",
+      "u128",
+      "usize",
+      "f32",
+      "f64",
+      "()",
+      "!"
+    ]);
+    var RUST_KEYWORDS = /* @__PURE__ */ new Set([
+      "as",
+      "async",
+      "await",
+      "break",
+      "const",
+      "continue",
+      "crate",
+      "dyn",
+      "else",
+      "enum",
+      "extern",
+      "false",
+      "fn",
+      "for",
+      "if",
+      "impl",
+      "in",
+      "let",
+      "loop",
+      "match",
+      "mod",
+      "move",
+      "mut",
+      "pub",
+      "ref",
+      "return",
+      "self",
+      "Self",
+      "static",
+      "struct",
+      "super",
+      "trait",
+      "true",
+      "type",
+      "unsafe",
+      "use",
+      "where",
+      "while"
+    ]);
+    function escapeRegex(s) {
+      return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    function _fileStem(filePath) {
+      const base = path_1.default.basename(filePath);
+      const ext = path_1.default.extname(base);
+      return ext ? base.slice(0, -ext.length) : base;
+    }
+    function _makeId(...parts) {
+      return parts.filter((p) => Boolean(p && p.trim())).map((p) => p.trim().replace(/[^a-zA-Z0-9_.-]/g, "_")).join("__");
+    }
+    function cleanRustComments(src) {
+      const commentStringPattern = /b?r(#*)".*?"\1|b?"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])'|\/\*[\s\S]*?\*\/|\/\/[^\n]*/g;
+      return src.replace(commentStringPattern, (token) => {
+        if (token.startsWith("/")) {
+          const newlineCount = (token.match(/\n/g) || []).length;
+          return "\n".repeat(newlineCount);
+        }
+        return token;
+      });
+    }
+    function _splitBalanced(text, delim = ",") {
+      const parts = [];
+      const current = [];
+      let depthAngle = 0;
+      let depthParen = 0;
+      let depthBracket = 0;
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (ch === "<")
+          depthAngle++;
+        else if (ch === ">")
+          depthAngle--;
+        else if (ch === "(")
+          depthParen++;
+        else if (ch === ")")
+          depthParen--;
+        else if (ch === "[")
+          depthBracket++;
+        else if (ch === "]")
+          depthBracket--;
+        else if (ch === delim && depthAngle === 0 && depthParen === 0 && depthBracket === 0) {
+          const trimmed = current.join("").trim();
+          if (trimmed)
+            parts.push(trimmed);
+          current.length = 0;
+          continue;
+        }
+        current.push(ch);
+      }
+      if (current.length > 0) {
+        const trimmed = current.join("").trim();
+        if (trimmed)
+          parts.push(trimmed);
+      }
+      return parts;
+    }
+    function _findMatchingBrace(text, startPos) {
+      let braceCount = 0;
+      let inDoubleQuote = false;
+      let escape = false;
+      const firstBrace = text.indexOf("{", startPos);
+      if (firstBrace === -1)
+        return text.length;
+      braceCount = 1;
+      let i = firstBrace + 1;
+      const n = text.length;
+      while (i < n) {
+        const char = text[i];
+        if (escape) {
+          escape = false;
+          i++;
+          continue;
+        }
+        if (char === "\\") {
+          escape = true;
+          i++;
+          continue;
+        }
+        if (char === '"') {
+          inDoubleQuote = !inDoubleQuote;
+        } else if (!inDoubleQuote) {
+          if (char === "{") {
+            braceCount++;
+          } else if (char === "}") {
+            braceCount--;
+            if (braceCount === 0) {
+              return i + 1;
+            }
+          }
+        }
+        i++;
+      }
+      return text.length;
+    }
+    function _rustCollectTypeRefs(typeStr, generic, out) {
+      if (!typeStr)
+        return;
+      const raw = typeStr.trim();
+      if (!raw)
+        return;
+      let clean = raw.replace(/&(?:\s*'[a-zA-Z_]\w*)?\s*(?:mut\s+)?/g, "").trim();
+      clean = clean.replace(/^\*(?:const|mut)\s+/g, "").trim();
+      if (clean.startsWith("[") && clean.endsWith("]")) {
+        const inner = clean.slice(1, -1).split(";")[0].trim();
+        _rustCollectTypeRefs(inner, generic, out);
+        return;
+      }
+      if (clean.startsWith("(") && clean.endsWith(")")) {
+        const inner = clean.slice(1, -1).trim();
+        if (inner) {
+          for (const part of _splitBalanced(inner)) {
+            _rustCollectTypeRefs(part, generic, out);
+          }
+        }
+        return;
+      }
+      if (clean.includes("+") && !clean.includes("<")) {
+        for (const part of clean.split("+")) {
+          _rustCollectTypeRefs(part.trim(), generic, out);
+        }
+        return;
+      }
+      if (clean.startsWith("dyn ")) {
+        clean = clean.slice(4).trim();
+      }
+      const angleIdx = clean.indexOf("<");
+      if (angleIdx !== -1 && clean.endsWith(">")) {
+        const baseType = clean.slice(0, angleIdx).trim();
+        const lastBaseSegment = baseType.split("::").pop().trim();
+        if (!RUST_PRIMITIVES.has(lastBaseSegment) && lastBaseSegment) {
+          out.push([lastBaseSegment, generic ? "generic_arg" : "type"]);
+        }
+        const argsText = clean.slice(angleIdx + 1, -1).trim();
+        const args2 = _splitBalanced(argsText);
+        for (const arg of args2) {
+          _rustCollectTypeRefs(arg, true, out);
+        }
+        return;
+      }
+      const lastSegment = clean.split("::").pop().trim();
+      if (!RUST_PRIMITIVES.has(lastSegment) && /^[a-zA-Z_]\w*$/.test(lastSegment)) {
+        out.push([lastSegment, generic ? "generic_arg" : "type"]);
+      }
+    }
+    function estimateComplexity(code, name) {
+      const lines = code.split("\n");
+      const defRegex = new RegExp(`(?:^|\\s)fn\\s+${escapeRegex(name)}\\s*(?:<[^>]*>)?\\s*\\(`, "m");
+      const defLineIdx = lines.findIndex((l) => defRegex.test(l));
+      if (defLineIdx === -1)
+        return "low";
+      let startLine = defLineIdx;
+      while (startLine < lines.length && !lines[startLine].includes("{")) {
+        startLine++;
+      }
+      if (startLine >= lines.length)
+        return "low";
+      let braceCount = 0;
+      let started = false;
+      const bodyLines = [];
+      for (let i = startLine; i < lines.length; i++) {
+        const line = lines[i];
+        for (const ch of line) {
+          if (ch === "{") {
+            braceCount++;
+            started = true;
+          } else if (ch === "}") {
+            braceCount--;
+          }
+        }
+        bodyLines.push(line);
+        if (started && braceCount <= 0)
+          break;
+      }
+      const body = bodyLines.join("\n");
+      const branches = (body.match(/\b(if|else\s+if|else|for|while|loop|match)\b|\?|(&&|\|\|)/g) || []).length;
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.low)
+        return "low";
+      if (branches <= constants_1.COMPLEXITY_THRESHOLDS.medium)
+        return "medium";
+      return "high";
+    }
+    exports2.rustEntityPatterns = [
+      // Functions: free functions, methods, async fn, const fn, unsafe fn
+      {
+        regex: /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:(?:async|const|unsafe|extern(?:\s+"[^"]*")?)\s+)*fn\s+([A-Za-z_]\w*)/gm,
+        type: "function"
+      },
+      // Structs
+      {
+        regex: /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?struct\s+([A-Za-z_]\w*)/gm,
+        type: "class"
+      },
+      // Enums
+      {
+        regex: /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?enum\s+([A-Za-z_]\w*)/gm,
+        type: "class"
+      },
+      // Traits
+      {
+        regex: /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?trait\s+([A-Za-z_]\w*)/gm,
+        type: "interface"
+      },
+      // Impl blocks: impl Type or impl Trait for Type
+      {
+        regex: /^[ \t]*impl(?:\s*<[^>]*>)?\s+(?:[A-Za-z_]\w*(?:\s*<[^>]*>)?\s+for\s+)?([A-Za-z_]\w*)/gm,
+        type: "class"
+      },
+      // Type aliases
+      {
+        regex: /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?type\s+([A-Za-z_]\w*)/gm,
+        type: "type"
+      }
+    ];
+    function extractEntities(code, _filePath) {
+      const cleanCode = cleanRustComments(code);
+      const entities = [];
+      function lineAt(offset) {
+        return cleanCode.slice(0, offset).split("\n").length;
+      }
+      const itemPattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:(struct|enum)|(?:unsafe\s+)?(trait))\s+([A-Za-z_]\w*)/gm;
+      let m;
+      while ((m = itemPattern.exec(cleanCode)) !== null) {
+        const isStructOrEnum = Boolean(m[1]);
+        const name = m[3];
+        if (RUST_KEYWORDS.has(name))
+          continue;
+        const line = lineAt(m.index);
+        if (!entities.some((e) => e.name === name && e.line === line)) {
+          entities.push({
+            name,
+            type: isStructOrEnum ? "class" : "interface",
+            line,
+            complexity: "low"
+          });
+        }
+      }
+      const typeAliasPattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?type\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*=/gm;
+      while ((m = typeAliasPattern.exec(cleanCode)) !== null) {
+        const name = m[1];
+        if (RUST_KEYWORDS.has(name))
+          continue;
+        const line = lineAt(m.index);
+        if (!entities.some((e) => e.name === name && e.line === line)) {
+          entities.push({
+            name,
+            type: "type",
+            line,
+            complexity: "low"
+          });
+        }
+      }
+      const fnPattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:(?:async|const|unsafe|extern(?:\s+"[^"]*")?)\s+)*fn\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(/gm;
+      while ((m = fnPattern.exec(cleanCode)) !== null) {
+        const name = m[1];
+        if (RUST_KEYWORDS.has(name))
+          continue;
+        const line = lineAt(m.index);
+        if (!entities.some((e) => e.name === name && e.line === line)) {
+          entities.push({
+            name,
+            type: "function",
+            line,
+            complexity: estimateComplexity(cleanCode, name)
+          });
+        }
+      }
+      return entities;
+    }
+    function extractImports(code) {
+      const cleanCode = cleanRustComments(code);
+      const imports = [];
+      const usePattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?use\s+([^;]+);/gm;
+      let m;
+      while ((m = usePattern.exec(cleanCode)) !== null) {
+        const raw = m[1].trim();
+        const isLocal = raw.startsWith("crate::") || raw.startsWith("super::") || raw.startsWith("self::");
+        if (raw.includes("{")) {
+          const braceStart = raw.indexOf("{");
+          const basePrefix = raw.slice(0, braceStart).replace(/::$/, "").trim();
+          const inner = raw.slice(braceStart + 1, raw.lastIndexOf("}")).trim();
+          const items = inner.split(",").map((s) => s.trim()).filter(Boolean);
+          const names = [];
+          for (const item of items) {
+            if (item === "self") {
+              const baseName = basePrefix.split("::").pop();
+              names.push(baseName);
+            } else if (item.includes(" as ")) {
+              const alias = item.split(" as ")[1].trim();
+              names.push(alias);
+            } else {
+              names.push(item.split("::").pop().trim());
+            }
+          }
+          imports.push({
+            source: basePrefix,
+            names: [...new Set(names)],
+            isLocal
+          });
+        } else {
+          let source = "";
+          let name = "";
+          if (raw.includes(" as ")) {
+            const parts = raw.split(" as ");
+            source = parts[0].trim();
+            name = parts[1].trim();
+          } else {
+            source = raw.trim();
+            const segments = raw.split("::");
+            name = segments[segments.length - 1].trim();
+          }
+          imports.push({
+            source,
+            names: [name],
+            isLocal
+          });
+        }
+      }
+      return imports;
+    }
+    function extractExports(code) {
+      const cleanCode = cleanRustComments(code);
+      const exports3 = [];
+      const itemPattern = /^[ \t]*pub(?:\([^)]*\))?\s+(?:(?:unsafe\s+)?(?:trait)|struct|enum|type)\s+([A-Za-z_]\w*)/gm;
+      let m;
+      while ((m = itemPattern.exec(cleanCode)) !== null) {
+        exports3.push(m[1]);
+      }
+      const fnPattern = /^[ \t]*pub(?:\([^)]*\))?\s+(?:(?:async|const|unsafe|extern(?:\s+"[^"]*")?)\s+)*fn\s+([A-Za-z_]\w*)/gm;
+      while ((m = fnPattern.exec(cleanCode)) !== null) {
+        exports3.push(m[1]);
+      }
+      const constPattern = /^[ \t]*pub(?:\([^)]*\))?\s+(?:const|static)\s+([A-Za-z_]\w*)/gm;
+      while ((m = constPattern.exec(cleanCode)) !== null) {
+        exports3.push(m[1]);
+      }
+      const usePattern = /^[ \t]*pub(?:\([^)]*\))?\s+use\s+([^;]+);/gm;
+      while ((m = usePattern.exec(cleanCode)) !== null) {
+        const raw = m[1].trim();
+        if (raw.includes("{")) {
+          const inner = raw.slice(raw.indexOf("{") + 1, raw.lastIndexOf("}")).trim();
+          const items = inner.split(",").map((s) => s.trim().split(/\s+as\s+/).pop()).filter(Boolean);
+          exports3.push(...items);
+        } else {
+          const last = raw.split(" as ").pop().split("::").pop().trim();
+          if (last && last !== "*")
+            exports3.push(last);
+        }
+      }
+      return [...new Set(exports3)];
+    }
+    exports2.RustParser = {
+      lang: "rust",
+      extensions: [".rs"],
+      extractEntities,
+      extractImports,
+      extractExports,
+      entityPatterns: exports2.rustEntityPatterns
+    };
+    (0, registry_1.registerParser)(exports2.RustParser);
+    function extractRust(fileInput) {
+      let source;
+      let strPath;
+      if (typeof fileInput === "string") {
+        strPath = fileInput;
+        const isPath = (fileInput.endsWith(".rs") || fileInput.includes("/") || fileInput.includes("\\")) && !fileInput.includes("\n");
+        if (isPath) {
+          try {
+            source = fs_12.default.readFileSync(fileInput, "utf-8");
+          } catch (err) {
+            return { nodes: [], edges: [], raw_calls: [], error: `cannot read ${fileInput}` };
+          }
+        } else {
+          source = fileInput;
+          strPath = "main.rs";
+        }
+      } else {
+        strPath = fileInput.path;
+        try {
+          source = fileInput.readText ? fileInput.readText() : fs_12.default.readFileSync(fileInput.path, "utf-8");
+        } catch (err) {
+          return { nodes: [], edges: [], raw_calls: [], error: `cannot read ${fileInput.path}` };
+        }
+      }
+      const cleanSource = cleanRustComments(source);
+      const stem = _fileStem(strPath);
+      function lineAt(offset) {
+        return cleanSource.slice(0, offset).split("\n").length;
+      }
+      const nodes = [];
+      const edges = [];
+      const rawCalls = [];
+      const seenIds = /* @__PURE__ */ new Set();
+      function addNode(nid, label, line) {
+        if (!seenIds.has(nid)) {
+          seenIds.add(nid);
+          nodes.push({
+            id: nid,
+            label,
+            file_type: "code",
+            source_file: strPath,
+            source_location: `L${line}`
+          });
+        }
+      }
+      function addEdge(src, tgt, relation, line, confidence = "EXTRACTED", weight = 1, context) {
+        const edge = {
+          source: src,
+          target: tgt,
+          relation,
+          confidence,
+          source_file: strPath,
+          source_location: `L${line}`,
+          weight
+        };
+        if (context)
+          edge.context = context;
+        edges.push(edge);
+      }
+      const fileNid = _makeId(strPath);
+      addNode(fileNid, path_1.default.basename(strPath), 1);
+      function ensureNamedNode(name, line) {
+        const nidInFile = _makeId(stem, name);
+        if (seenIds.has(nidInFile)) {
+          return nidInFile;
+        }
+        const nidGlobal = _makeId(name);
+        if (!seenIds.has(nidGlobal)) {
+          seenIds.add(nidGlobal);
+          nodes.push({
+            id: nidGlobal,
+            label: name,
+            file_type: "code",
+            source_file: "",
+            source_location: "",
+            origin_file: strPath
+          });
+        }
+        return nidGlobal;
+      }
+      function emitParamReturnRefs(paramsText, returnText, funcNid, line) {
+        if (paramsText) {
+          for (const p of _splitBalanced(paramsText)) {
+            if (p === "&self" || p === "&mut self" || p === "self" || p === "mut self")
+              continue;
+            const colonIdx = p.indexOf(":");
+            if (colonIdx !== -1) {
+              const typePart = p.slice(colonIdx + 1).trim();
+              const refs = [];
+              _rustCollectTypeRefs(typePart, false, refs);
+              for (const [refName, role] of refs) {
+                const ctx = role === "generic_arg" ? "generic_arg" : "parameter_type";
+                const tgt = ensureNamedNode(refName, line);
+                if (tgt !== funcNid) {
+                  addEdge(funcNid, tgt, "references", line, "EXTRACTED", 1, ctx);
+                }
+              }
+            }
+          }
+        }
+        if (returnText) {
+          const refs = [];
+          _rustCollectTypeRefs(returnText, false, refs);
+          for (const [refName, role] of refs) {
+            const ctx = role === "generic_arg" ? "generic_arg" : "return_type";
+            const tgt = ensureNamedNode(refName, line);
+            if (tgt !== funcNid) {
+              addEdge(funcNid, tgt, "references", line, "EXTRACTED", 1, ctx);
+            }
+          }
+        }
+      }
+      const functionBodies = [];
+      const itemPattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:(struct|enum)|(?:unsafe\s+)?(trait)|(impl))\b/gm;
+      let m;
+      while ((m = itemPattern.exec(cleanSource)) !== null) {
+        const itemStart = m.index;
+        const kind = m[1] || m[2] || m[3];
+        const headerEnd = cleanSource.indexOf("{", itemStart);
+        const semiEnd = cleanSource.indexOf(";", itemStart);
+        if (kind === "struct") {
+          const structM = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?struct\s+([A-Za-z_]\w*)(?:<[^>]*>)?(?:\s*\(([^)]*)\)|\s*\{)?/m.exec(cleanSource.slice(itemStart, itemStart + 300));
+          if (structM) {
+            const structName = structM[1];
+            const line = lineAt(itemStart);
+            const structNid = _makeId(stem, structName);
+            addNode(structNid, structName, line);
+            addEdge(fileNid, structNid, "contains", line);
+            const tupleFields = structM[2];
+            if (tupleFields !== void 0) {
+              for (const field of _splitBalanced(tupleFields)) {
+                const cleanField = field.replace(/^pub(?:\([^)]*\))?\s+/, "").trim();
+                const refs = [];
+                _rustCollectTypeRefs(cleanField, false, refs);
+                for (const [refName, role] of refs) {
+                  const ctx = role === "generic_arg" ? "generic_arg" : "field";
+                  const tgt = ensureNamedNode(refName, line);
+                  if (tgt !== structNid) {
+                    addEdge(structNid, tgt, "references", line, "EXTRACTED", 1, ctx);
+                  }
+                }
+              }
+            } else if (headerEnd !== -1 && (semiEnd === -1 || headerEnd < semiEnd)) {
+              const bodyEnd = _findMatchingBrace(cleanSource, itemStart);
+              const body = cleanSource.slice(headerEnd + 1, bodyEnd - 1);
+              for (const rawField of _splitBalanced(body, ",")) {
+                const field = rawField.trim();
+                if (!field)
+                  continue;
+                const colonIdx = field.indexOf(":");
+                if (colonIdx !== -1) {
+                  const fType = field.slice(colonIdx + 1).trim();
+                  const fLine = lineAt(headerEnd);
+                  const refs = [];
+                  _rustCollectTypeRefs(fType, false, refs);
+                  for (const [refName, role] of refs) {
+                    const ctx = role === "generic_arg" ? "generic_arg" : "field";
+                    const tgt = ensureNamedNode(refName, fLine);
+                    if (tgt !== structNid) {
+                      addEdge(structNid, tgt, "references", fLine, "EXTRACTED", 1, ctx);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else if (kind === "enum") {
+          const enumM = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?enum\s+([A-Za-z_]\w*)/m.exec(cleanSource.slice(itemStart, itemStart + 200));
+          if (enumM && headerEnd !== -1) {
+            const enumName = enumM[1];
+            const line = lineAt(itemStart);
+            const enumNid = _makeId(stem, enumName);
+            addNode(enumNid, enumName, line);
+            addEdge(fileNid, enumNid, "contains", line);
+            const bodyEnd = _findMatchingBrace(cleanSource, itemStart);
+            const body = cleanSource.slice(headerEnd + 1, bodyEnd - 1);
+            const variantPattern = /([A-Za-z_]\w*)(?:\s*\(([^)]*)\)|\s*\{([^}]*)\})?/g;
+            let vm;
+            while ((vm = variantPattern.exec(body)) !== null) {
+              const vLine = lineAt(headerEnd + vm.index);
+              const tupleTypes = vm[2];
+              const structFields = vm[3];
+              if (tupleTypes) {
+                for (const t of _splitBalanced(tupleTypes)) {
+                  const refs = [];
+                  _rustCollectTypeRefs(t.trim(), false, refs);
+                  for (const [refName, role] of refs) {
+                    const ctx = role === "generic_arg" ? "generic_arg" : "field";
+                    const tgt = ensureNamedNode(refName, vLine);
+                    if (tgt !== enumNid) {
+                      addEdge(enumNid, tgt, "references", vLine, "EXTRACTED", 1, ctx);
+                    }
+                  }
+                }
+              } else if (structFields) {
+                for (const rawField of _splitBalanced(structFields, ",")) {
+                  const field = rawField.trim();
+                  if (!field)
+                    continue;
+                  const colonIdx = field.indexOf(":");
+                  if (colonIdx !== -1) {
+                    const fType = field.slice(colonIdx + 1).trim();
+                    const refs = [];
+                    _rustCollectTypeRefs(fType, false, refs);
+                    for (const [refName, role] of refs) {
+                      const ctx = role === "generic_arg" ? "generic_arg" : "field";
+                      const tgt = ensureNamedNode(refName, vLine);
+                      if (tgt !== enumNid) {
+                        addEdge(enumNid, tgt, "references", vLine, "EXTRACTED", 1, ctx);
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } else if (kind === "trait") {
+          const traitM = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:unsafe\s+)?trait\s+([A-Za-z_]\w*)(?:<[^>]*>)?(?:\s*:\s*([^{]+))?/m.exec(cleanSource.slice(itemStart, itemStart + 300));
+          if (traitM && headerEnd !== -1) {
+            const traitName = traitM[1];
+            const line = lineAt(itemStart);
+            const traitNid = _makeId(stem, traitName);
+            addNode(traitNid, traitName, line);
+            addEdge(fileNid, traitNid, "contains", line);
+            const boundsStr = traitM[2];
+            if (boundsStr) {
+              const bounds = boundsStr.split("+").map((s) => s.trim()).filter(Boolean);
+              for (let idx = 0; idx < bounds.length; idx++) {
+                const b = bounds[idx];
+                const refs = [];
+                _rustCollectTypeRefs(b, false, refs);
+                for (let rIdx = 0; rIdx < refs.length; rIdx++) {
+                  const [refName] = refs[rIdx];
+                  const tgt = ensureNamedNode(refName, line);
+                  if (tgt === traitNid)
+                    continue;
+                  const rel = idx === 0 && rIdx === 0 ? "inherits" : "references";
+                  addEdge(traitNid, tgt, rel, line, "EXTRACTED", 1, rel === "references" ? "generic_arg" : void 0);
+                }
+              }
+            }
+            const bodyEnd = _findMatchingBrace(cleanSource, itemStart);
+            const body = cleanSource.slice(headerEnd + 1, bodyEnd - 1);
+            const traitMethodPattern = /^[ \t]*(?:(?:async|const|unsafe|extern(?:\s+"[^"]*")?)\s+)*fn\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(([^)]*)\)(?:\s*->\s*([^{;]+))?\s*([{;])/gm;
+            let tmm;
+            while ((tmm = traitMethodPattern.exec(body)) !== null) {
+              const methodName = tmm[1];
+              const mLine = lineAt(headerEnd + tmm.index);
+              const methodNid = _makeId(traitNid, methodName);
+              addNode(methodNid, `.${methodName}()`, mLine);
+              addEdge(traitNid, methodNid, "method", mLine);
+              emitParamReturnRefs(tmm[2], tmm[3], methodNid, mLine);
+              if (tmm[4] === "{") {
+                const mBodyEnd = _findMatchingBrace(body, tmm.index);
+                const mBody = body.slice(tmm.index + tmm[0].length - 1, mBodyEnd);
+                functionBodies.push([methodNid, mBody, headerEnd + tmm.index + tmm[0].length - 1]);
+              }
+            }
+          }
+        } else if (kind === "impl") {
+          const implHeader = cleanSource.slice(itemStart, headerEnd).trim();
+          const implM = /^[ \t]*impl(?:\s*<[^>]*>)?\s+(?:([A-Za-z_]\w*(?:\s*<[^>]*>)?)\s+for\s+)?([A-Za-z_]\w*(?:\s*<[^>]*>)?)/m.exec(implHeader);
+          if (implM && headerEnd !== -1) {
+            const traitPart = implM[1];
+            const typePart = implM[2];
+            const typeName = typePart.split("<")[0].split("::").pop().trim();
+            const line = lineAt(itemStart);
+            const implNid = _makeId(stem, typeName);
+            addNode(implNid, typeName, line);
+            if (traitPart) {
+              const traitRefs = [];
+              _rustCollectTypeRefs(traitPart, false, traitRefs);
+              for (let idx = 0; idx < traitRefs.length; idx++) {
+                const [refName] = traitRefs[idx];
+                const tgt = ensureNamedNode(refName, line);
+                if (tgt !== implNid) {
+                  if (idx === 0) {
+                    addEdge(implNid, tgt, "implements", line);
+                  } else {
+                    addEdge(implNid, tgt, "references", line, "EXTRACTED", 1, "generic_arg");
+                  }
+                }
+              }
+            }
+            const bodyEnd = _findMatchingBrace(cleanSource, itemStart);
+            const body = cleanSource.slice(headerEnd + 1, bodyEnd - 1);
+            const implMethodPattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:(?:async|const|unsafe|extern(?:\s+"[^"]*")?)\s+)*fn\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(([^)]*)\)(?:\s*->\s*([^{]+))?\s*\{/gm;
+            let imm;
+            while ((imm = implMethodPattern.exec(body)) !== null) {
+              const methodName = imm[1];
+              const mLine = lineAt(headerEnd + imm.index);
+              const methodNid = _makeId(implNid, methodName);
+              addNode(methodNid, `.${methodName}()`, mLine);
+              addEdge(implNid, methodNid, "method", mLine);
+              emitParamReturnRefs(imm[2], imm[3], methodNid, mLine);
+              const mBodyEnd = _findMatchingBrace(body, imm.index);
+              const mBody = body.slice(imm.index + imm[0].length - 1, mBodyEnd);
+              functionBodies.push([methodNid, mBody, headerEnd + imm.index + imm[0].length - 1]);
+            }
+          }
+        }
+      }
+      const freeFnPattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?(?:(?:async|const|unsafe|extern(?:\s+"[^"]*")?)\s+)*fn\s+([A-Za-z_]\w*)\s*(?:<[^>]*>)?\s*\(([^)]*)\)(?:\s*->\s*([^{]+))?\s*\{/gm;
+      while ((m = freeFnPattern.exec(cleanSource)) !== null) {
+        const funcName = m[1];
+        const funcLine = lineAt(m.index);
+        const funcNid = _makeId(stem, funcName);
+        if (!seenIds.has(funcNid)) {
+          addNode(funcNid, `${funcName}()`, funcLine);
+          addEdge(fileNid, funcNid, "contains", funcLine);
+          emitParamReturnRefs(m[2], m[3], funcNid, funcLine);
+          const mBodyEnd = _findMatchingBrace(cleanSource, m.index);
+          const mBody = cleanSource.slice(m.index + m[0].length - 1, mBodyEnd);
+          functionBodies.push([funcNid, mBody, m.index + m[0].length - 1]);
+        }
+      }
+      const usePattern = /^[ \t]*(?:pub(?:\([^)]*\))?\s+)?use\s+([^;]+);/gm;
+      while ((m = usePattern.exec(cleanSource)) !== null) {
+        const raw = m[1].trim();
+        const line = lineAt(m.index);
+        if (raw.includes("{")) {
+          const basePrefix = raw.slice(0, raw.indexOf("{")).replace(/::$/, "").trim();
+          const moduleName = basePrefix.split("::").pop().trim();
+          if (moduleName) {
+            const tgtNid = _makeId(moduleName);
+            addEdge(fileNid, tgtNid, "imports_from", line, "EXTRACTED", 1, "import");
+          }
+        } else {
+          const clean = raw.split(" as ")[0].trim().replace(/::\*$/, "").replace(/::$/, "");
+          const moduleName = clean.split("::").pop().trim();
+          if (moduleName) {
+            const tgtNid = _makeId(moduleName);
+            addEdge(fileNid, tgtNid, "imports_from", line, "EXTRACTED", 1, "import");
+          }
+        }
+      }
+      const labelToNid = {};
+      for (const n of nodes) {
+        const raw = n.label;
+        const normalised = raw.replace(/\(\)$/, "").replace(/^\./, "");
+        labelToNid[normalised] = n.id;
+      }
+      const seenCallPairs = /* @__PURE__ */ new Set();
+      for (const [callerNid, bodyCode, bodyOffset] of functionBodies) {
+        const callPattern = /([A-Za-z_]\w*)(?:::([A-Za-z_]\w*))?\s*\(|\.([A-Za-z_]\w*)\s*\(/g;
+        let cm;
+        while ((cm = callPattern.exec(bodyCode)) !== null) {
+          const isMemberCall = Boolean(cm[3]);
+          const isScopedCall = Boolean(cm[2]);
+          const calleeName = cm[3] || cm[2] || cm[1];
+          if (!calleeName || RUST_KEYWORDS.has(calleeName))
+            continue;
+          const callLine = lineAt(bodyOffset + cm.index);
+          const tgtNid = labelToNid[calleeName];
+          if (tgtNid && tgtNid !== callerNid) {
+            const pairKey = `${callerNid}->${tgtNid}`;
+            if (!seenCallPairs.has(pairKey)) {
+              seenCallPairs.add(pairKey);
+              edges.push({
+                source: callerNid,
+                target: tgtNid,
+                relation: "calls",
+                confidence: "EXTRACTED",
+                source_file: strPath,
+                source_location: `L${callLine}`,
+                weight: 1,
+                context: "call"
+              });
+            }
+          } else if (!isScopedCall && !exports2.RUST_TRAIT_METHOD_BLOCKLIST.has(calleeName.toLowerCase())) {
+            rawCalls.push({
+              caller_nid: callerNid,
+              callee: calleeName,
+              is_member_call: isMemberCall,
+              source_file: strPath,
+              source_location: `L${callLine}`
+            });
+          }
+        }
+      }
+      const validIds = seenIds;
+      const cleanEdges = edges.filter((e) => validIds.has(e.source) && (validIds.has(e.target) || e.relation === "imports_from" || e.relation === "imports"));
+      return { nodes, edges: cleanEdges, raw_calls: rawCalls };
+    }
+  }
+});
+
 // dist/stages/collector.js
 var require_collector = __commonJS({
   "dist/stages/collector.js"(exports2) {
@@ -2793,7 +3665,15 @@ var require_graph = __commonJS({
     }
     function resolvePath(fromFile, importSource, allFiles) {
       const fromDir = path_1.default.dirname(fromFile);
-      const base = path_1.default.join(fromDir, importSource);
+      let normalizedSource = importSource;
+      if (normalizedSource.startsWith("crate::")) {
+        normalizedSource = normalizedSource.slice(7).replace(/::/g, "/");
+      } else if (normalizedSource.startsWith("super::")) {
+        normalizedSource = "../" + normalizedSource.slice(7).replace(/::/g, "/");
+      } else if (normalizedSource.startsWith("self::")) {
+        normalizedSource = "./" + normalizedSource.slice(6).replace(/::/g, "/");
+      }
+      const base = path_1.default.join(fromDir, normalizedSource);
       const candidates = [
         base,
         `${base}.ts`,
@@ -2802,13 +3682,31 @@ var require_graph = __commonJS({
         `${base}.jsx`,
         `${base}/index.ts`,
         `${base}/index.js`,
-        `${base}.dart`
+        `${base}.dart`,
+        `${base}.rs`
       ];
       for (const candidate of candidates) {
         const normalized = candidate.replace(/\\/g, "/");
         const found = allFiles.find((f) => f.filePath.replace(/\\/g, "/") === normalized);
         if (found)
           return found.filePath;
+      }
+      const parentBase = path_1.default.dirname(base);
+      if (parentBase && parentBase !== base) {
+        const parentCandidates = [
+          `${parentBase}.rs`,
+          `${parentBase}.ts`,
+          `${parentBase}.tsx`,
+          `${parentBase}.js`,
+          `${parentBase}.jsx`,
+          `${parentBase}.dart`
+        ];
+        for (const candidate of parentCandidates) {
+          const normalized = candidate.replace(/\\/g, "/");
+          const found = allFiles.find((f) => f.filePath.replace(/\\/g, "/") === normalized);
+          if (found)
+            return found.filePath;
+        }
       }
       return null;
     }
@@ -3246,6 +4144,7 @@ require_php();
 require_ruby();
 require_swift();
 require_dart();
+require_rust();
 var fs_1 = __importDefault(require("fs"));
 var collector_1 = require_collector();
 var parser_1 = require_parser();
