@@ -64,7 +64,7 @@ function getFlag(flag: string): string | undefined {
  */
 function printHelp(): void {
   console.log(`
-${bold('DepGraph')} ${dim('v1.5.1')}
+${bold('DepGraph')} ${dim('v1.5.2')}
 ${dim('Dependency mapping · Impact simulation · Developer intelligence')}
 
 ${bold('USAGE')}
@@ -117,7 +117,7 @@ ${bold('GIT EXAMPLES')}
 function printBanner(): void {
   console.log(`
 ${bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
-${bold('  DepGraph')}  ${dim('v1.0.0')}
+${bold('  DepGraph')}  ${dim('v1.5.2')}
 ${bold('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')}
 `);
 }

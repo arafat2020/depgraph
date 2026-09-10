@@ -4173,7 +4173,7 @@ function getFlag(flag) {
 }
 function printHelp() {
   console.log(`
-${bold("DepGraph")} ${dim("v1.5.1")}
+${bold("DepGraph")} ${dim("v1.5.2")}
 ${dim("Dependency mapping \xB7 Impact simulation \xB7 Developer intelligence")}
 
 ${bold("USAGE")}
@@ -4222,7 +4222,7 @@ ${bold("GIT EXAMPLES")}
 function printBanner() {
   console.log(`
 ${bold("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")}
-${bold("  DepGraph")}  ${dim("v1.0.0")}
+${bold("  DepGraph")}  ${dim("v1.5.2")}
 ${bold("\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501")}
 `);
 }
